@@ -1,68 +1,15 @@
-import api from './api';
 
-
+import api from "./api";
 
 const inventoryApi = {
+  // =========================================================
+  // GET ALL STOCK
+  // GET /inventory/stocks/
+  // =========================================================
 
-  // Get all stock
   getAll: async (params = {}) => {
-    const response = await api.get('/inventory/stock/', {
-      params,
-    });
-
-    return response.data;
-  },
-
-  // Get single stock record
-  getById: async (id) => {
-    const response = await api.get(`/inventory/stock/${id}/`);
-
-    return response.data;
-  },
-
-  // Create stock record
-  create: async (data) => {
-    const response = await api.post(
-      '/inventory/stock/',
-      data
-    );
-
-    return response.data;
-  },
-
-  // Update stock record
-  update: async (id, data) => {
-    const response = await api.put(
-      `/inventory/stock/${id}/`,
-      data
-    );
-
-    return response.data;
-  },
-
-  // Partial update
-  patch: async (id, data) => {
-    const response = await api.patch(
-      `/inventory/stock/${id}/`,
-      data
-    );
-
-    return response.data;
-  },
-
-  // Delete stock record
-  delete: async (id) => {
-    const response = await api.delete(
-      `/inventory/stock/${id}/`
-    );
-
-    return response.data;
-  },
-
-  // Get stock movements
-  getMovements: async (params = {}) => {
     const response = await api.get(
-      '/inventory/stock-movements/',
+      "/inventory/stocks/",
       {
         params,
       }
@@ -71,7 +18,95 @@ const inventoryApi = {
     return response.data;
   },
 
-  // Get one stock movement
+  // =========================================================
+  // GET SINGLE STOCK
+  // GET /inventory/stocks/{id}/
+  // =========================================================
+
+  getById: async (id) => {
+    const response = await api.get(
+      `/inventory/stocks/${id}/`
+    );
+
+    return response.data;
+  },
+
+  // =========================================================
+  // CREATE STOCK
+  // POST /inventory/stocks/
+  // =========================================================
+
+  create: async (data) => {
+    const response = await api.post(
+      "/inventory/stocks/",
+      data
+    );
+
+    return response.data;
+  },
+
+  // =========================================================
+  // UPDATE STOCK
+  // PUT /inventory/stocks/{id}/
+  // =========================================================
+
+  update: async (id, data) => {
+    const response = await api.put(
+      `/inventory/stocks/${id}/`,
+      data
+    );
+
+    return response.data;
+  },
+
+  // =========================================================
+  // PARTIAL UPDATE STOCK
+  // PATCH /inventory/stocks/{id}/
+  // =========================================================
+
+  patch: async (id, data) => {
+    const response = await api.patch(
+      `/inventory/stocks/${id}/`,
+      data
+    );
+
+    return response.data;
+  },
+
+  // =========================================================
+  // DELETE STOCK
+  // DELETE /inventory/stocks/{id}/
+  // =========================================================
+
+  delete: async (id) => {
+    const response = await api.delete(
+      `/inventory/stocks/${id}/`
+    );
+
+    return response.data;
+  },
+
+  // =========================================================
+  // STOCK MOVEMENTS
+  // GET /inventory/stock-movements/
+  // =========================================================
+
+  getMovements: async (params = {}) => {
+    const response = await api.get(
+      "/inventory/stock-movements/",
+      {
+        params,
+      }
+    );
+
+    return response.data;
+  },
+
+  // =========================================================
+  // GET SINGLE STOCK MOVEMENT
+  // GET /inventory/stock-movements/{id}/
+  // =========================================================
+
   getMovementById: async (id) => {
     const response = await api.get(
       `/inventory/stock-movements/${id}/`
@@ -80,34 +115,51 @@ const inventoryApi = {
     return response.data;
   },
 
-  // Create stock movement
+  // =========================================================
+  // CREATE STOCK MOVEMENT
+  // POST /inventory/stock-movements/
+  // =========================================================
+
   createMovement: async (data) => {
     const response = await api.post(
-      '/inventory/stock-movements/',
+      "/inventory/stock-movements/",
       data
     );
 
     return response.data;
   },
 
-  // Low stock
+  // =========================================================
+  // LOW STOCK
+  //
+  // IMPORTANT:
+  // This endpoint only exists if your StockViewSet
+  // has a @action for low-stock.
+  // =========================================================
+
   getLowStock: async () => {
     const response = await api.get(
-      '/inventory/stock/low-stock/'
+      "/inventory/stocks/low-stock/"
     );
 
     return response.data;
   },
 
-  // Out of stock
+  // =========================================================
+  // OUT OF STOCK
+  //
+  // IMPORTANT:
+  // This endpoint only exists if your StockViewSet
+  // has a @action for out-of-stock.
+  // =========================================================
+
   getOutOfStock: async () => {
     const response = await api.get(
-      '/inventory/stock/out-of-stock/'
+      "/inventory/stocks/out-of-stock/"
     );
 
     return response.data;
   },
-
 };
 
 export default inventoryApi;

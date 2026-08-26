@@ -1,690 +1,890 @@
 import React, {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
   useState,
 } from "react";
 
+import inventoryApi from "../services/inventoryApi";
+
 const InventoryContext = createContext(null);
 
 export const InventoryProvider = ({ children }) => {
   // =========================================================
-  // PRODUCTS
+  // STATE
   // =========================================================
 
-  const [products, setProducts] = useState(() => {
-    const saved = localStorage.getItem("pos_products");
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [stockAdjustments, setStockAdjustments] = useState([]);
 
-    return saved
-      ? JSON.parse(saved)
-      : [
-          {
-            id: 1,
-            sku: "USB-001",
-            name: "USB-C Charger",
-            categoryId: 1,
-            categoryName: "Chargers",
-            supplierId: 1,
-            supplierName: "Tech Supplier Ltd",
-            buyingPrice: 8000,
-            sellingPrice: 15000,
-            stock: 5,
-            minStock: 10,
-            unit: "pcs",
-            status: "active",
-          },
-          {
-            id: 2,
-            sku: "CASE-001",
-            name: "iPhone Case",
-            categoryId: 2,
-            categoryName: "Phone Cases",
-            supplierId: 1,
-            supplierName: "Tech Supplier Ltd",
-            buyingPrice: 10000,
-            sellingPrice: 25000,
-            stock: 25,
-            minStock: 10,
-            unit: "pcs",
-            status: "active",
-          },
-          {
-            id: 3,
-            sku: "PB-001",
-            name: "Power Bank",
-            categoryId: 3,
-            categoryName: "Power Banks",
-            supplierId: 2,
-            supplierName: "Mobile World",
-            buyingPrice: 20000,
-            sellingPrice: 35000,
-            stock: 3,
-            minStock: 10,
-            unit: "pcs",
-            status: "active",
-          },
-        ];
-  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   // =========================================================
-  // CATEGORIES
+  // SAFE NUMBER
   // =========================================================
 
-  const [categories, setCategories] = useState(() => {
-    const saved = localStorage.getItem("pos_categories");
+  const toNumber = (value) => {
+    const number = Number(value);
 
-    return saved
-      ? JSON.parse(saved)
-      : [
-          {
-            id: 1,
-            name: "Chargers",
-            description: "Phone chargers and adapters",
-            status: "active",
-          },
-          {
-            id: 2,
-            name: "Phone Cases",
-            description: "Phone covers and protective cases",
-            status: "active",
-          },
-          {
-            id: 3,
-            name: "Power Banks",
-            description: "Portable power banks",
-            status: "active",
-          },
-        ];
-  });
-
-  // =========================================================
-  // SUPPLIERS
-  // =========================================================
-
-  const [suppliers, setSuppliers] = useState(() => {
-    const saved = localStorage.getItem("pos_suppliers");
-
-    return saved
-      ? JSON.parse(saved)
-      : [
-          {
-            id: 1,
-            name: "Tech Supplier Ltd",
-            phone: "0712345678",
-            email: "sales@techsupplier.com",
-            address: "Dar es Salaam",
-            status: "active",
-          },
-          {
-            id: 2,
-            name: "Mobile World",
-            phone: "0755555555",
-            email: "info@mobileworld.com",
-            address: "Kariakoo",
-            status: "active",
-          },
-        ];
-  });
-
-  // =========================================================
-  // PURCHASES
-  // =========================================================
-
-  const [purchases, setPurchases] = useState(() => {
-    const saved = localStorage.getItem("pos_purchases");
-
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  // =========================================================
-  // STOCK ADJUSTMENTS
-  // =========================================================
-
-  const [stockAdjustments, setStockAdjustments] = useState(() => {
-    const saved = localStorage.getItem("pos_stock_adjustments");
-
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  // =========================================================
-  // SAVE TO LOCAL STORAGE
-  // =========================================================
-
-  useEffect(() => {
-    localStorage.setItem("pos_products", JSON.stringify(products));
-  }, [products]);
-
-  useEffect(() => {
-    localStorage.setItem("pos_categories", JSON.stringify(categories));
-  }, [categories]);
-
-  useEffect(() => {
-    localStorage.setItem("pos_suppliers", JSON.stringify(suppliers));
-  }, [suppliers]);
-
-  useEffect(() => {
-    localStorage.setItem("pos_purchases", JSON.stringify(purchases));
-  }, [purchases]);
-
-  useEffect(() => {
-    localStorage.setItem(
-      "pos_stock_adjustments",
-      JSON.stringify(stockAdjustments)
-    );
-  }, [stockAdjustments]);
-
-  // =========================================================
-  // PRODUCTS CRUD
-  // =========================================================
-
-  const addProduct = (product) => {
-    const category = categories.find(
-      (item) => Number(item.id) === Number(product.categoryId)
-    );
-
-    const supplier = suppliers.find(
-      (item) => Number(item.id) === Number(product.supplierId)
-    );
-
-    const newProduct = {
-      ...product,
-      id: Date.now(),
-      categoryName: category?.name || "",
-      supplierName: supplier?.name || "",
-      stock: Number(product.stock || 0),
-      buyingPrice: Number(product.buyingPrice || 0),
-      sellingPrice: Number(product.sellingPrice || 0),
-      minStock: Number(product.minStock || 0),
-      status: product.status || "active",
-    };
-
-    setProducts((prev) => [...prev, newProduct]);
-
-    return newProduct;
-  };
-
-  const updateProduct = (id, updatedProduct) => {
-    setProducts((prev) =>
-      prev.map((product) =>
-        product.id === id
-          ? {
-              ...product,
-              ...updatedProduct,
-            }
-          : product
-      )
-    );
-  };
-
-  const deleteProduct = (id) => {
-    setProducts((prev) =>
-      prev.filter((product) => product.id !== id)
-    );
-  };
-
-  const getProduct = (id) => {
-    return products.find(
-      (product) => Number(product.id) === Number(id)
-    );
+    return Number.isFinite(number) ? number : 0;
   };
 
   // =========================================================
-  // STOCK OPERATIONS
+  // NORMALIZE STOCK RECORD
+  //
+  // This allows the frontend to work whether your API returns:
+  //
+  // product.current_stock
+  // product.stock
+  // current_stock
+  //
+  // and snake_case/camelCase variations.
   // =========================================================
 
-  const increaseStock = (productId, quantity) => {
-    const qty = Number(quantity);
+  const normalizeStockRecord = useCallback((record) => {
+  if (!record) {
+    return null;
+  }
 
-    if (!qty || qty <= 0) {
-      return;
-    }
+  const quantity = toNumber(record.quantity);
+  const minQuantity = toNumber(record.min_quantity);
+  const maxQuantity = toNumber(record.max_quantity);
+  const reservedQuantity = toNumber(record.reserved_quantity);
 
-    setProducts((prev) =>
-      prev.map((product) =>
-        product.id === productId
-          ? {
-              ...product,
-              stock: Number(product.stock) + qty,
-            }
-          : product
-      )
-    );
-  };
+  const costPrice = toNumber(record.cost_price);
+  const sellingPrice = toNumber(record.selling_price);
 
-  const decreaseStock = (productId, quantity) => {
-    const qty = Number(quantity);
+  return {
+    // =====================================================
+    // STOCK
+    // =====================================================
 
-    if (!qty || qty <= 0) {
-      return;
-    }
+    stockId: record.id,
+    id: record.product,
+    productId: record.product,
 
-    setProducts((prev) =>
-      prev.map((product) =>
-        product.id === productId
-          ? {
-              ...product,
-              stock: Math.max(
-                0,
-                Number(product.stock) - qty
-              ),
-            }
-          : product
-      )
-    );
-  };
+    // =====================================================
+    // PRODUCT
+    // =====================================================
 
-  const adjustStock = ({
-    productId,
+    name: record.product_name || "Unnamed Product",
+
+    sku: record.product_sku || "",
+
+    // =====================================================
+    // CATEGORY
+    // =====================================================
+
+    categoryId: record.category_id,
+    categoryName: record.category_name || "",
+
+    // =====================================================
+    // BRANCH
+    // =====================================================
+
+    branchId: record.branch,
+    branchName: record.branch_name || "",
+
+    // =====================================================
+    // STOCK
+    // =====================================================
+
+    stock: quantity,
+
+    currentStock: quantity,
+
     quantity,
-    type,
-    reason,
-    reference,
-  }) => {
-    const product = products.find(
-      (item) => item.id === Number(productId)
-    );
 
-    if (!product) {
-      return;
-    }
+    reservedQuantity,
 
-    const qty = Number(quantity);
+    minStock: minQuantity,
 
-    if (!qty || qty <= 0) {
-      return;
-    }
+    minimumStock: minQuantity,
 
-    let newStock = Number(product.stock);
+    minQuantity,
 
-    if (type === "increase") {
-      newStock += qty;
-    }
+    maxStock: maxQuantity,
 
-    if (type === "decrease") {
-      newStock = Math.max(0, newStock - qty);
-    }
+    maxQuantity,
 
-    if (type === "set") {
-      newStock = qty;
-    }
+    // =====================================================
+    // PRICES
+    // =====================================================
 
-    setProducts((prev) =>
-      prev.map((item) =>
-        item.id === product.id
-          ? {
-              ...item,
-              stock: newStock,
-            }
-          : item
-      )
-    );
+    costPrice,
 
-    const adjustment = {
-      id: Date.now(),
-      productId: product.id,
-      productName: product.name,
-      previousStock: product.stock,
-      quantity: qty,
-      newStock,
-      type,
-      reason: reason || "",
-      reference: reference || "",
-      date: new Date().toISOString(),
-    };
+    sellingPrice,
 
-    setStockAdjustments((prev) => [
-      adjustment,
-      ...prev,
-    ]);
+    // Backward compatibility
+    buyingPrice: costPrice,
 
-    return adjustment;
+    // =====================================================
+    // DATES
+    // =====================================================
+
+    lastUpdated: record.last_updated,
+
+    createdAt: record.created_at,
+
+    // =====================================================
+    // ORIGINAL API RECORD
+    // =====================================================
+
+    raw: record,
   };
+}, []);
 
   // =========================================================
-  // CATEGORY CRUD
+  // EXTRACT API RESULTS
+  //
+  // Supports DRF pagination:
+  //
+  // {
+  //   count: 10,
+  //   results: [...]
+  // }
+  //
+  // And normal arrays:
+  //
+  // [...]
   // =========================================================
 
-  const addCategory = (category) => {
-    const newCategory = {
-      ...category,
-      id: Date.now(),
-      status: category.status || "active",
-    };
+  const extractResults = useCallback((response) => {
+    if (Array.isArray(response)) {
+      return response;
+    }
 
-    setCategories((prev) => [
-      ...prev,
-      newCategory,
-    ]);
+    if (Array.isArray(response?.results)) {
+      return response.results;
+    }
 
-    return newCategory;
-  };
+    if (Array.isArray(response?.data)) {
+      return response.data;
+    }
 
-  const updateCategory = (id, updatedCategory) => {
-    setCategories((prev) =>
-      prev.map((category) =>
-        category.id === id
-          ? {
-              ...category,
-              ...updatedCategory,
-            }
-          : category
-      )
-    );
+    return [];
+  }, []);
 
-    // Update category name on products
-    if (updatedCategory.name) {
-      setProducts((prev) =>
-        prev.map((product) =>
-          Number(product.categoryId) === Number(id)
-            ? {
-                ...product,
-                categoryName: updatedCategory.name,
+  // =========================================================
+  // LOAD INVENTORY
+  // =========================================================
+
+  const loadInventory = useCallback(
+    async (params = {}) => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const response =
+          await inventoryApi.getAll(params);
+
+        const records =
+          extractResults(response);
+
+        const normalizedProducts =
+          records.map(normalizeStockRecord);
+
+        setProducts(normalizedProducts);
+
+        // ===================================================
+        // BUILD CATEGORIES FROM API DATA
+        //
+        // This avoids hardcoded categories.
+        // ===================================================
+
+        const categoryMap = new Map();
+
+        normalizedProducts.forEach((product) => {
+          if (
+            product.category &&
+            product.category.id
+          ) {
+            categoryMap.set(
+              product.category.id,
+              product.category
+            );
+          } else if (
+            product.categoryId &&
+            product.categoryName
+          ) {
+            categoryMap.set(
+              product.categoryId,
+              {
+                id: product.categoryId,
+                name: product.categoryName,
               }
-            : product
-        )
-      );
-    }
-  };
+            );
+          }
+        });
 
-  const deleteCategory = (id) => {
-    const hasProducts = products.some(
-      (product) =>
-        Number(product.categoryId) === Number(id)
-    );
-
-    if (hasProducts) {
-      return {
-        success: false,
-        message:
-          "Cannot delete category because it contains products.",
-      };
-    }
-
-    setCategories((prev) =>
-      prev.filter((category) => category.id !== id)
-    );
-
-    return {
-      success: true,
-    };
-  };
-
-  // =========================================================
-  // SUPPLIER CRUD
-  // =========================================================
-
-  const addSupplier = (supplier) => {
-    const newSupplier = {
-      ...supplier,
-      id: Date.now(),
-      status: supplier.status || "active",
-    };
-
-    setSuppliers((prev) => [
-      ...prev,
-      newSupplier,
-    ]);
-
-    return newSupplier;
-  };
-
-  const updateSupplier = (id, updatedSupplier) => {
-    setSuppliers((prev) =>
-      prev.map((supplier) =>
-        supplier.id === id
-          ? {
-              ...supplier,
-              ...updatedSupplier,
-            }
-          : supplier
-      )
-    );
-
-    // Update supplier name on products
-    if (updatedSupplier.name) {
-      setProducts((prev) =>
-        prev.map((product) =>
-          Number(product.supplierId) === Number(id)
-            ? {
-                ...product,
-                supplierName: updatedSupplier.name,
-              }
-            : product
-        )
-      );
-    }
-  };
-
-  const deleteSupplier = (id) => {
-    const hasProducts = products.some(
-      (product) =>
-        Number(product.supplierId) === Number(id)
-    );
-
-    if (hasProducts) {
-      return {
-        success: false,
-        message:
-          "Cannot delete supplier because products are linked to this supplier.",
-      };
-    }
-
-    setSuppliers((prev) =>
-      prev.filter((supplier) => supplier.id !== id)
-    );
-
-    return {
-      success: true,
-    };
-  };
-
-  // =========================================================
-  // PURCHASES
-  // =========================================================
-
-  const addPurchase = (purchase) => {
-    const newPurchase = {
-      ...purchase,
-      id: Date.now(),
-      date:
-        purchase.date ||
-        new Date().toISOString(),
-      status: purchase.status || "received",
-    };
-
-    setPurchases((prev) => [
-      newPurchase,
-      ...prev,
-    ]);
-
-    // Automatically increase stock
-    if (purchase.items?.length) {
-      purchase.items.forEach((item) => {
-        increaseStock(
-          Number(item.productId),
-          Number(item.quantity)
+        setCategories(
+          Array.from(categoryMap.values())
         );
-      });
-    }
 
-    return newPurchase;
-  };
+        return normalizedProducts;
+      } catch (err) {
+        console.error(
+          "Failed to load inventory:",
+          err
+        );
 
-  const updatePurchase = (id, updatedPurchase) => {
-    setPurchases((prev) =>
-      prev.map((purchase) =>
-        purchase.id === id
-          ? {
-              ...purchase,
-              ...updatedPurchase,
-            }
-          : purchase
-      )
-    );
-  };
+        const message =
+          err?.response?.data?.detail ||
+          err?.response?.data?.message ||
+          err?.message ||
+          "Failed to load inventory.";
 
-  const deletePurchase = (id) => {
-    setPurchases((prev) =>
-      prev.filter((purchase) => purchase.id !== id)
-    );
-  };
+        setError(message);
+
+        setProducts([]);
+        setCategories([]);
+
+        throw err;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [
+      extractResults,
+      normalizeStockRecord,
+    ]
+  );
 
   // =========================================================
-  // INVENTORY HELPERS
+  // INITIAL LOAD
+  // =========================================================
+
+  useEffect(() => {
+    loadInventory();
+  }, [loadInventory]);
+
+  // =========================================================
+  // GET SINGLE STOCK
+  // =========================================================
+
+  const getStock = useCallback(async (id) => {
+    try {
+      const response =
+        await inventoryApi.getById(id);
+
+      return normalizeStockRecord(response);
+    } catch (err) {
+      console.error(
+        "Failed to get stock:",
+        err
+      );
+
+      throw err;
+    }
+  }, [normalizeStockRecord]);
+
+  // =========================================================
+  // CREATE STOCK
+  //
+  // NOTE:
+  // This should only be used if your backend
+  // allows creating stock records directly.
+  // =========================================================
+
+  const createStock = useCallback(
+    async (data) => {
+      try {
+        const response =
+          await inventoryApi.create(data);
+
+        await loadInventory();
+
+        return response;
+      } catch (err) {
+        console.error(
+          "Failed to create stock:",
+          err
+        );
+
+        throw err;
+      }
+    },
+    [loadInventory]
+  );
+
+  // =========================================================
+  // UPDATE STOCK
+  // =========================================================
+
+  const updateStock = useCallback(
+    async (id, data) => {
+      try {
+        const response =
+          await inventoryApi.update(
+            id,
+            data
+          );
+
+        await loadInventory();
+
+        return response;
+      } catch (err) {
+        console.error(
+          "Failed to update stock:",
+          err
+        );
+
+        throw err;
+      }
+    },
+    [loadInventory]
+  );
+
+  // =========================================================
+  // PATCH STOCK
+  // =========================================================
+
+  const patchStock = useCallback(
+    async (id, data) => {
+      try {
+        const response =
+          await inventoryApi.patch(
+            id,
+            data
+          );
+
+        await loadInventory();
+
+        return response;
+      } catch (err) {
+        console.error(
+          "Failed to patch stock:",
+          err
+        );
+
+        throw err;
+      }
+    },
+    [loadInventory]
+  );
+
+  // =========================================================
+  // DELETE STOCK
+  // =========================================================
+
+  const deleteStock = useCallback(
+    async (id) => {
+      try {
+        const response =
+          await inventoryApi.delete(id);
+
+        await loadInventory();
+
+        return response;
+      } catch (err) {
+        console.error(
+          "Failed to delete stock:",
+          err
+        );
+
+        throw err;
+      }
+    },
+    [loadInventory]
+  );
+
+  // =========================================================
+  // INCREASE STOCK
+  //
+  // Uses backend API instead of localStorage.
+  //
+  // The exact payload depends on your Django serializer.
+  // =========================================================
+
+  const increaseStock = useCallback(
+    async (stockId, quantity, reason = "") => {
+      const qty = toNumber(quantity);
+
+      if (qty <= 0) {
+        throw new Error(
+          "Quantity must be greater than zero."
+        );
+      }
+
+      return patchStock(stockId, {
+        quantity: qty,
+        type: "increase",
+        reason,
+      });
+    },
+    [patchStock]
+  );
+
+  // =========================================================
+  // DECREASE STOCK
+  // =========================================================
+
+  const decreaseStock = useCallback(
+    async (stockId, quantity, reason = "") => {
+      const qty = toNumber(quantity);
+
+      if (qty <= 0) {
+        throw new Error(
+          "Quantity must be greater than zero."
+        );
+      }
+
+      return patchStock(stockId, {
+        quantity: qty,
+        type: "decrease",
+        reason,
+      });
+    },
+    [patchStock]
+  );
+
+  // =========================================================
+  // ADJUST STOCK
+  // =========================================================
+
+  const adjustStock = useCallback(
+    async ({
+      stockId,
+      productId,
+      quantity,
+      type,
+      reason = "",
+      reference = "",
+    }) => {
+      const qty = toNumber(quantity);
+
+      if (qty <= 0) {
+        throw new Error(
+          "Quantity must be greater than zero."
+        );
+      }
+
+      const id =
+        stockId ?? productId;
+
+      if (!id) {
+        throw new Error(
+          "Stock ID is required."
+        );
+      }
+
+      return patchStock(id, {
+        quantity: qty,
+        type,
+        reason,
+        reference,
+      });
+    },
+    [patchStock]
+  );
+
+  // =========================================================
+  // LOAD STOCK MOVEMENTS
+  // =========================================================
+
+  const loadStockMovements =
+    useCallback(async (params = {}) => {
+      try {
+        const response =
+          await inventoryApi.getMovements(
+            params
+          );
+
+        const movements =
+          extractResults(response);
+
+        setStockAdjustments(movements);
+
+        return movements;
+      } catch (err) {
+        console.error(
+          "Failed to load stock movements:",
+          err
+        );
+
+        throw err;
+      }
+    }, [extractResults]);
+
+  // =========================================================
+  // LOW STOCK FROM API
+  // =========================================================
+
+  const loadLowStock =
+    useCallback(async () => {
+      try {
+        const response =
+          await inventoryApi.getLowStock();
+
+        const records =
+          extractResults(response);
+
+        return records.map(
+          normalizeStockRecord
+        );
+      } catch (err) {
+        console.error(
+          "Failed to load low stock:",
+          err
+        );
+
+        throw err;
+      }
+    }, [
+      extractResults,
+      normalizeStockRecord,
+    ]);
+
+  // =========================================================
+  // OUT OF STOCK FROM API
+  // =========================================================
+
+  const loadOutOfStock =
+    useCallback(async () => {
+      try {
+        const response =
+          await inventoryApi.getOutOfStock();
+
+        const records =
+          extractResults(response);
+
+        return records.map(
+          normalizeStockRecord
+        );
+      } catch (err) {
+        console.error(
+          "Failed to load out of stock:",
+          err
+        );
+
+        throw err;
+      }
+    }, [
+      extractResults,
+      normalizeStockRecord,
+    ]);
+
+  // =========================================================
+  // LOW STOCK PRODUCTS
   // =========================================================
 
   const lowStockProducts = useMemo(() => {
-    return products.filter(
-      (product) =>
-        Number(product.stock) <=
-        Number(product.minStock)
-    );
+    return products.filter((product) => {
+      const stock = toNumber(
+        product.stock
+      );
+
+      const minimumStock = toNumber(
+        product.minimumStock ??
+          product.minStock
+      );
+
+      return (
+        stock > 0 &&
+        stock <= minimumStock
+      );
+    });
   }, [products]);
+
+  // =========================================================
+  // OUT OF STOCK PRODUCTS
+  // =========================================================
 
   const outOfStockProducts = useMemo(() => {
     return products.filter(
-      (product) => Number(product.stock) <= 0
+      (product) =>
+        toNumber(product.stock) <= 0
     );
   }, [products]);
 
-  const totalProducts = products.length;
+  // =========================================================
+  // TOTAL PRODUCTS
+  // =========================================================
+
+  const totalProducts =
+    products.length;
+
+  // =========================================================
+  // TOTAL STOCK
+  // =========================================================
 
   const totalStock = useMemo(() => {
     return products.reduce(
       (total, product) =>
-        total + Number(product.stock || 0),
+        total +
+        toNumber(product.stock),
       0
     );
   }, [products]);
+
+  // =========================================================
+  // INVENTORY VALUE
+  //
+  // Stock × Cost Price
+  // =========================================================
 
   const inventoryValue = useMemo(() => {
     return products.reduce(
-      (total, product) =>
-        total +
-        Number(product.stock || 0) *
-          Number(product.buyingPrice || 0),
+      (total, product) => {
+        const stock =
+          toNumber(product.stock);
+
+        const costPrice =
+          toNumber(product.costPrice);
+
+        return (
+          total +
+          stock * costPrice
+        );
+      },
       0
     );
   }, [products]);
 
-  const potentialSalesValue = useMemo(() => {
-    return products.reduce(
-      (total, product) =>
-        total +
-        Number(product.stock || 0) *
-          Number(product.sellingPrice || 0),
-      0
+  // =========================================================
+  // POTENTIAL SALES VALUE
+  //
+  // Stock × Selling Price
+  // =========================================================
+
+  const potentialSalesValue =
+    useMemo(() => {
+      return products.reduce(
+        (total, product) => {
+          const stock =
+            toNumber(product.stock);
+
+          const sellingPrice =
+            toNumber(
+              product.sellingPrice
+            );
+
+          return (
+            total +
+            stock * sellingPrice
+          );
+        },
+        0
+      );
+    }, [products]);
+
+  // =========================================================
+  // LOW + OUT OF STOCK COUNT
+  // =========================================================
+
+  const lowAndOutOfStock =
+    lowStockProducts.length +
+    outOfStockProducts.length;
+
+  // =========================================================
+  // SEARCH PRODUCTS
+  // =========================================================
+
+  const searchProducts = useCallback(
+    (searchTerm = "") => {
+      const term =
+        searchTerm
+          .trim()
+          .toLowerCase();
+
+      if (!term) {
+        return products;
+      }
+
+      return products.filter(
+        (product) => {
+          const name =
+            product.name
+              ?.toLowerCase() || "";
+
+          const sku =
+            product.sku
+              ?.toLowerCase() || "";
+
+          const barcode =
+            product.barcode
+              ?.toLowerCase() || "";
+
+          const category =
+            product.categoryName
+              ?.toLowerCase() || "";
+
+          return (
+            name.includes(term) ||
+            sku.includes(term) ||
+            barcode.includes(term) ||
+            category.includes(term)
+          );
+        }
+      );
+    },
+    [products]
+  );
+
+  // =========================================================
+  // GET PRODUCT
+  // =========================================================
+
+  const getProduct = useCallback(
+    (id) => {
+      return products.find(
+        (product) =>
+          Number(product.id) ===
+          Number(id)
+      );
+    },
+    [products]
+  );
+
+  // =========================================================
+  // REFRESH
+  // =========================================================
+
+  const refreshInventory =
+    useCallback(
+      async (params = {}) => {
+        return loadInventory(params);
+      },
+      [loadInventory]
     );
-  }, [products]);
-
-  // =========================================================
-  // SEARCH
-  // =========================================================
-
-  const searchProducts = (searchTerm) => {
-    if (!searchTerm) {
-      return products;
-    }
-
-    const term = searchTerm.toLowerCase();
-
-    return products.filter(
-      (product) =>
-        product.name
-          ?.toLowerCase()
-          .includes(term) ||
-        product.sku
-          ?.toLowerCase()
-          .includes(term) ||
-        product.categoryName
-          ?.toLowerCase()
-          .includes(term)
-    );
-  };
-
-  // =========================================================
-  // RESET DATA
-  // =========================================================
-
-  const resetInventory = () => {
-    localStorage.removeItem("pos_products");
-    localStorage.removeItem("pos_categories");
-    localStorage.removeItem("pos_suppliers");
-    localStorage.removeItem("pos_purchases");
-    localStorage.removeItem(
-      "pos_stock_adjustments"
-    );
-
-    window.location.reload();
-  };
 
   // =========================================================
   // CONTEXT VALUE
   // =========================================================
 
-  const value = {
-    // Products
-    products,
-    addProduct,
-    updateProduct,
-    deleteProduct,
-    getProduct,
+  const value = useMemo(
+    () => ({
+      // -----------------------------------------------------
+      // DATA
+      // -----------------------------------------------------
 
-    // Stock
-    increaseStock,
-    decreaseStock,
-    adjustStock,
+      products,
+      categories,
+      stockAdjustments,
 
-    // Categories
-    categories,
-    addCategory,
-    updateCategory,
-    deleteCategory,
+      // -----------------------------------------------------
+      // LOADING / ERROR
+      // -----------------------------------------------------
 
-    // Suppliers
-    suppliers,
-    addSupplier,
-    updateSupplier,
-    deleteSupplier,
+      loading,
+      error,
 
-    // Purchases
-    purchases,
-    addPurchase,
-    updatePurchase,
-    deletePurchase,
+      // -----------------------------------------------------
+      // REFRESH
+      // -----------------------------------------------------
 
-    // Stock adjustments
-    stockAdjustments,
+      loadInventory,
+      refreshInventory,
 
-    // Inventory statistics
-    totalProducts,
-    totalStock,
-    inventoryValue,
-    potentialSalesValue,
-    lowStockProducts,
-    outOfStockProducts,
+      // -----------------------------------------------------
+      // STOCK
+      // -----------------------------------------------------
 
-    // Search
-    searchProducts,
+      getStock,
+      createStock,
+      updateStock,
+      patchStock,
+      deleteStock,
 
-    // Reset
-    resetInventory,
-  };
+      increaseStock,
+      decreaseStock,
+      adjustStock,
+
+      // -----------------------------------------------------
+      // API QUERIES
+      // -----------------------------------------------------
+
+      loadLowStock,
+      loadOutOfStock,
+      loadStockMovements,
+
+      // -----------------------------------------------------
+      // HELPERS
+      // -----------------------------------------------------
+
+      getProduct,
+      searchProducts,
+
+      // -----------------------------------------------------
+      // STATISTICS
+      // -----------------------------------------------------
+
+      totalProducts,
+      totalStock,
+
+      inventoryValue,
+      potentialSalesValue,
+
+      lowStockProducts,
+      outOfStockProducts,
+
+      lowAndOutOfStock,
+    }),
+    [
+      products,
+      categories,
+      stockAdjustments,
+
+      loading,
+      error,
+
+      loadInventory,
+      refreshInventory,
+
+      getStock,
+      createStock,
+      updateStock,
+      patchStock,
+      deleteStock,
+
+      increaseStock,
+      decreaseStock,
+      adjustStock,
+
+      loadLowStock,
+      loadOutOfStock,
+      loadStockMovements,
+
+      getProduct,
+      searchProducts,
+
+      totalProducts,
+      totalStock,
+
+      inventoryValue,
+      potentialSalesValue,
+
+      lowStockProducts,
+      outOfStockProducts,
+
+      lowAndOutOfStock,
+    ]
+  );
+
+  // =========================================================
+  // PROVIDER
+  // =========================================================
 
   return (
-    <InventoryContext.Provider value={value}>
+    <InventoryContext.Provider
+      value={value}
+    >
       {children}
     </InventoryContext.Provider>
   );
 };
 
-// =========================================================
+// =============================================================
 // CUSTOM HOOK
-// =========================================================
+// =============================================================
 
 export const useInventory = () => {
-  const context = useContext(InventoryContext);
+  const context =
+    useContext(InventoryContext);
 
   if (!context) {
     throw new Error(
