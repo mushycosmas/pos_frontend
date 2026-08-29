@@ -45,6 +45,71 @@ const EMPTY_ITEM = {
 };
 
 // ==========================================================
+// NUMBER HELPER
+// ==========================================================
+
+const toNumber = (value, fallback = 0) => {
+  if (
+    value === null ||
+    value === undefined ||
+    value === ""
+  ) {
+    return fallback;
+  }
+
+  const number = Number(value);
+
+  return Number.isFinite(number)
+    ? number
+    : fallback;
+};
+
+// ==========================================================
+// SAFE FIXED NUMBER
+// ==========================================================
+
+const fixedNumber = (
+  value,
+  decimals = 2
+) => {
+  return Number(
+    toNumber(value).toFixed(decimals)
+  );
+};
+
+// ==========================================================
+// DATE HELPER
+// ==========================================================
+
+const formatDateForInput = (value) => {
+  if (!value) {
+    return new Date()
+      .toISOString()
+      .split("T")[0];
+  }
+
+  // Already YYYY-MM-DD
+  if (
+    typeof value === "string" &&
+    /^\d{4}-\d{2}-\d{2}$/.test(value)
+  ) {
+    return value;
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return new Date()
+      .toISOString()
+      .split("T")[0];
+  }
+
+  return date
+    .toISOString()
+    .split("T")[0];
+};
+
+// ==========================================================
 // GENERATE PURCHASE NUMBER
 // ==========================================================
 
@@ -77,6 +142,192 @@ const generatePurchaseNumber = () => {
 };
 
 // ==========================================================
+// GET PRODUCT ID
+// ==========================================================
+
+const getProductId = (item) => {
+  if (
+    item?.product &&
+    typeof item.product === "object"
+  ) {
+    return (
+      item.product.id ??
+      item.product.pk ??
+      ""
+    );
+  }
+
+  return (
+    item?.product_id ??
+    item?.productId ??
+    item?.product ??
+    ""
+  );
+};
+
+// ==========================================================
+// GET PRODUCT NAME
+// ==========================================================
+
+const getProductName = (
+  item,
+  products
+) => {
+  if (item?.product_name) {
+    return item.product_name;
+  }
+
+  if (
+    item?.product &&
+    typeof item.product === "object"
+  ) {
+    return (
+      item.product.name ||
+      item.product.product_name ||
+      item.product.title ||
+      "Product"
+    );
+  }
+
+  const productId =
+    getProductId(item);
+
+  const product = products.find(
+    (currentProduct) =>
+      Number(currentProduct.id) ===
+      Number(productId)
+  );
+
+  return (
+    product?.name ||
+    product?.product_name ||
+    "Product"
+  );
+};
+
+// ==========================================================
+// NORMALIZE PURCHASE ITEM
+// ==========================================================
+
+const normalizePurchaseItem = (
+  item,
+  products
+) => {
+  const productId =
+    getProductId(item);
+
+  const quantity = toNumber(
+    item?.quantity,
+    1
+  );
+
+  const unitCost = toNumber(
+    item?.unit_cost ??
+      item?.unitCost ??
+      item?.cost_price,
+    0
+  );
+
+  const discount = toNumber(
+    item?.discount ??
+      item?.discount_rate,
+    0
+  );
+
+  const tax = toNumber(
+    item?.tax ??
+      item?.tax_rate,
+    18
+  );
+
+  const gross =
+    quantity * unitCost;
+
+  const discountAmount =
+    gross * (discount / 100);
+
+  const taxableAmount =
+    gross - discountAmount;
+
+  const taxAmount =
+    taxableAmount * (tax / 100);
+
+  const calculatedTotal =
+    taxableAmount + taxAmount;
+
+  const backendTotal =
+    item?.total ??
+    item?.total_amount ??
+    item?.line_total;
+
+  const total =
+    backendTotal !== undefined &&
+    backendTotal !== null &&
+    backendTotal !== ""
+      ? toNumber(
+          backendTotal,
+          calculatedTotal
+        )
+      : calculatedTotal;
+
+  return {
+    id: item?.id,
+
+    product:
+      productId !== ""
+        ? Number(productId)
+        : "",
+
+    product_name:
+      getProductName(
+        item,
+        products
+      ),
+
+    quantity: toNumber(
+      quantity,
+      1
+    ),
+
+    received_quantity:
+      toNumber(
+        item?.received_quantity,
+        0
+      ),
+
+    unit_cost:
+      fixedNumber(unitCost),
+
+    discount:
+      fixedNumber(discount),
+
+    tax:
+      fixedNumber(tax),
+
+    gross:
+      fixedNumber(gross),
+
+    discount_amount:
+      fixedNumber(
+        discountAmount
+      ),
+
+    subtotal:
+      fixedNumber(
+        taxableAmount
+      ),
+
+    tax_amount:
+      fixedNumber(
+        taxAmount
+      ),
+
+    total:
+      fixedNumber(total),
+  };
+};
+
+// ==========================================================
 // PURCHASE MODAL
 // ==========================================================
 
@@ -84,9 +335,14 @@ const PurchaseModal = ({
   show,
   onHide,
   onSave,
+
   products = [],
   suppliers = [],
   branches = [],
+
+  purchase = null,
+  editing = false,
+  saving: parentSaving = false,
 }) => {
   // ========================================================
   // STATE
@@ -100,12 +356,24 @@ const PurchaseModal = ({
     ...EMPTY_ITEM,
   });
 
-  const [error, setError] = useState("");
+  const [error, setError] =
+    useState("");
 
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving] =
+    useState(false);
 
   // ========================================================
-  // RESET FORM WHEN MODAL OPENS
+  // EFFECTIVE EDIT MODE
+  // ========================================================
+
+  const isEditing =
+    Boolean(
+      editing && purchase?.id
+    );
+
+  // ========================================================
+  // INITIALIZE FORM
+  // CREATE OR EDIT
   // ========================================================
 
   useEffect(() => {
@@ -113,129 +381,307 @@ const PurchaseModal = ({
       return;
     }
 
+    setError("");
+    setSaving(false);
+
+    // ======================================================
+    // EDIT PURCHASE
+    // ======================================================
+
+    if (
+      purchase &&
+      purchase.id
+    ) {
+      const rawItems =
+        Array.isArray(
+          purchase.items
+        )
+          ? purchase.items
+          : Array.isArray(
+              purchase.purchase_items
+            )
+          ? purchase.purchase_items
+          : [];
+
+      const normalizedItems =
+        rawItems.map(
+          (currentItem) =>
+            normalizePurchaseItem(
+              currentItem,
+              products
+            )
+        );
+
+      const supplierId =
+        purchase?.supplier?.id ??
+        purchase?.supplier_id ??
+        purchase?.supplier ??
+        "";
+
+      const branchId =
+        purchase?.branch?.id ??
+        purchase?.branch_id ??
+        purchase?.branch ??
+        1;
+
+      const purchaseNumber =
+        purchase?.purchase_number ??
+        purchase?.purchaseNumber ??
+        "";
+
+      const orderDate =
+        purchase?.order_date ??
+        purchase?.purchase_date ??
+        purchase?.created_at;
+
+      setForm({
+        purchase_number:
+          String(
+            purchaseNumber
+          ),
+
+        supplier:
+          supplierId !== ""
+            ? String(
+                supplierId
+              )
+            : "",
+
+        branch:
+          branchId !== ""
+            ? String(branchId)
+            : "1",
+
+        order_date:
+          formatDateForInput(
+            orderDate
+          ),
+
+        status:
+          purchase?.status ||
+          "received",
+
+        payment_status:
+          purchase?.payment_status ||
+          "pending",
+
+        notes:
+          purchase?.notes || "",
+
+        items:
+          normalizedItems,
+      });
+
+      setItem({
+        ...EMPTY_ITEM,
+      });
+
+      console.log(
+        "EDIT PURCHASE:",
+        purchase
+      );
+
+      console.log(
+        "NORMALIZED EDIT FORM:",
+        {
+          purchase_number:
+            String(
+              purchaseNumber
+            ),
+          supplier:
+            String(
+              supplierId
+            ),
+          branch:
+            String(
+              branchId
+            ),
+          order_date:
+            formatDateForInput(
+              orderDate
+            ),
+          status:
+            purchase?.status ||
+            "received",
+          payment_status:
+            purchase?.payment_status ||
+            "pending",
+          notes:
+            purchase?.notes || "",
+          items:
+            normalizedItems,
+        }
+      );
+
+      return;
+    }
+
+    // ======================================================
+    // CREATE NEW PURCHASE
+    // ======================================================
+
     setForm({
       ...EMPTY_FORM,
-      purchase_number: generatePurchaseNumber(),
-      branch: 1,
-      order_date: new Date()
-        .toISOString()
-        .split("T")[0],
+
+      purchase_number:
+        generatePurchaseNumber(),
+
+      supplier: "",
+
+      branch:
+        branches.length > 0
+          ? String(
+              branches[0].id
+            )
+          : "1",
+
+      order_date:
+        new Date()
+          .toISOString()
+          .split("T")[0],
+
       status: "received",
-      payment_status: "pending",
+
+      payment_status:
+        "pending",
+
       notes: "",
+
       items: [],
     });
 
     setItem({
       ...EMPTY_ITEM,
     });
-
-    setError("");
-    setSaving(false);
-  }, [show]);
+  }, [
+    show,
+    purchase,
+    products,
+    branches,
+  ]);
 
   // ========================================================
   // FORM CHANGE
   // ========================================================
 
-  const handleFormChange = (event) => {
+  const handleFormChange = (
+    event
+  ) => {
     const {
       name,
       value,
     } = event.target;
 
-    setForm((previous) => ({
-      ...previous,
-      [name]: value,
-    }));
+    setForm(
+      (previous) => ({
+        ...previous,
+        [name]: value,
+      })
+    );
   };
 
   // ========================================================
   // ITEM CHANGE
   // ========================================================
 
-  const handleItemChange = (event) => {
+  const handleItemChange = (
+    event
+  ) => {
     const {
       name,
       value,
     } = event.target;
 
-    setItem((previous) => ({
-      ...previous,
-      [name]: value,
-    }));
+    setItem(
+      (previous) => ({
+        ...previous,
+        [name]: value,
+      })
+    );
   };
 
   // ========================================================
   // SELECTED PRODUCT
   // ========================================================
 
-  const selectedProduct = useMemo(() => {
-    if (!item.product) {
-      return null;
-    }
+  const selectedProduct =
+    useMemo(() => {
+      if (!item.product) {
+        return null;
+      }
 
-    return products.find(
-      (product) =>
-        Number(product.id) ===
-        Number(item.product)
-    );
-  }, [
-    item.product,
-    products,
-  ]);
+      return products.find(
+        (product) =>
+          Number(product.id) ===
+          Number(item.product)
+      );
+    }, [
+      item.product,
+      products,
+    ]);
 
   // ========================================================
   // CURRENT ITEM CALCULATION
   // ========================================================
 
-  const currentItemCalculation = useMemo(() => {
-    const quantity = Number(
-      item.quantity || 0
-    );
+  const currentItemCalculation =
+    useMemo(() => {
+      const quantity =
+        toNumber(
+          item.quantity,
+          0
+        );
 
-    const unitCost = Number(
-      item.unit_cost || 0
-    );
+      const unitCost =
+        toNumber(
+          item.unit_cost,
+          0
+        );
 
-    const discountRate = Number(
-      item.discount || 0
-    );
+      const discountRate =
+        toNumber(
+          item.discount,
+          0
+        );
 
-    const taxRate = Number(
-      item.tax || 0
-    );
+      const taxRate =
+        toNumber(
+          item.tax,
+          0
+        );
 
-    const gross =
-      quantity * unitCost;
+      const gross =
+        quantity * unitCost;
 
-    const discountAmount =
-      gross *
-      (discountRate / 100);
+      const discountAmount =
+        gross *
+        (discountRate / 100);
 
-    const taxableAmount =
-      gross - discountAmount;
+      const taxableAmount =
+        gross -
+        discountAmount;
 
-    const taxAmount =
-      taxableAmount *
-      (taxRate / 100);
+      const taxAmount =
+        taxableAmount *
+        (taxRate / 100);
 
-    const total =
-      taxableAmount + taxAmount;
+      const total =
+        taxableAmount +
+        taxAmount;
 
-    return {
-      gross,
-      discountAmount,
-      taxableAmount,
-      taxAmount,
-      total,
-    };
-  }, [
-    item.quantity,
-    item.unit_cost,
-    item.discount,
-    item.tax,
-  ]);
+      return {
+        gross,
+        discountAmount,
+        taxableAmount,
+        taxAmount,
+        total,
+      };
+    }, [
+      item.quantity,
+      item.unit_cost,
+      item.discount,
+      item.tax,
+    ]);
 
   // ========================================================
   // ADD ITEM
@@ -260,16 +706,20 @@ const PurchaseModal = ({
     // QUANTITY
     // ------------------------------------------------------
 
-    const quantity = Number(
-      item.quantity
-    );
+    const quantity =
+      toNumber(
+        item.quantity,
+        0
+      );
 
     if (
-      !Number.isFinite(quantity) ||
+      !Number.isInteger(
+        quantity
+      ) ||
       quantity <= 0
     ) {
       setError(
-        "Quantity must be greater than zero."
+        "Quantity must be a whole number greater than zero."
       );
 
       return;
@@ -279,13 +729,28 @@ const PurchaseModal = ({
     // UNIT COST
     // ------------------------------------------------------
 
-    const unitCost = Number(
-      item.unit_cost
-    );
-
     if (
       item.unit_cost === "" ||
-      !Number.isFinite(unitCost) ||
+      item.unit_cost === null ||
+      item.unit_cost === undefined
+    ) {
+      setError(
+        "Please enter a valid unit cost."
+      );
+
+      return;
+    }
+
+    const unitCost =
+      toNumber(
+        item.unit_cost,
+        -1
+      );
+
+    if (
+      !Number.isFinite(
+        unitCost
+      ) ||
       unitCost < 0
     ) {
       setError(
@@ -299,12 +764,16 @@ const PurchaseModal = ({
     // DISCOUNT
     // ------------------------------------------------------
 
-    const discount = Number(
-      item.discount || 0
-    );
+    const discount =
+      toNumber(
+        item.discount,
+        0
+      );
 
     if (
-      !Number.isFinite(discount) ||
+      !Number.isFinite(
+        discount
+      ) ||
       discount < 0 ||
       discount > 100
     ) {
@@ -319,12 +788,16 @@ const PurchaseModal = ({
     // TAX
     // ------------------------------------------------------
 
-    const tax = Number(
-      item.tax || 0
-    );
+    const tax =
+      toNumber(
+        item.tax,
+        0
+      );
 
     if (
-      !Number.isFinite(tax) ||
+      !Number.isFinite(
+        tax
+      ) ||
       tax < 0 ||
       tax > 100
     ) {
@@ -366,7 +839,8 @@ const PurchaseModal = ({
       taxableAmount,
       taxAmount,
       total,
-    } = currentItemCalculation;
+    } =
+      currentItemCalculation;
 
     // ------------------------------------------------------
     // NEW ITEM
@@ -374,71 +848,68 @@ const PurchaseModal = ({
 
     const newItem = {
       product:
-        Number(item.product),
+        Number(
+          item.product
+        ),
 
       product_name:
         selectedProduct?.name ||
+        selectedProduct?.product_name ||
         "Product",
 
       quantity,
 
       unit_cost:
-        Number(
-          unitCost.toFixed(2)
+        fixedNumber(
+          unitCost
         ),
 
       discount:
-        Number(
-          discount.toFixed(2)
+        fixedNumber(
+          discount
         ),
 
       tax:
-        Number(
-          tax.toFixed(2)
-        ),
-
-      subtotal:
-        Number(
-          taxableAmount.toFixed(2)
-        ),
-
-      tax_amount:
-        Number(
-          taxAmount.toFixed(2)
-        ),
-
-      total:
-        Number(
-          total.toFixed(2)
+        fixedNumber(
+          tax
         ),
 
       gross:
-        Number(
-          gross.toFixed(2)
+        fixedNumber(
+          gross
         ),
 
       discount_amount:
-        Number(
-          discountAmount.toFixed(2)
+        fixedNumber(
+          discountAmount
+        ),
+
+      subtotal:
+        fixedNumber(
+          taxableAmount
+        ),
+
+      tax_amount:
+        fixedNumber(
+          taxAmount
+        ),
+
+      total:
+        fixedNumber(
+          total
         ),
     };
 
-    // ------------------------------------------------------
-    // ADD ITEM
-    // ------------------------------------------------------
+    setForm(
+      (previous) => ({
+        ...previous,
 
-    setForm((previous) => ({
-      ...previous,
-
-      items: [
-        ...previous.items,
-        newItem,
-      ],
-    }));
-
-    // ------------------------------------------------------
-    // RESET ITEM
-    // ------------------------------------------------------
+        items: [
+          ...previous.items,
+          newItem,
+        ],
+      })
+    );
 
     setItem({
       ...EMPTY_ITEM,
@@ -449,15 +920,24 @@ const PurchaseModal = ({
   // REMOVE ITEM
   // ========================================================
 
-  const handleRemoveItem = (index) => {
-    setForm((previous) => ({
-      ...previous,
+  const handleRemoveItem = (
+    index
+  ) => {
+    setForm(
+      (previous) => ({
+        ...previous,
 
-      items: previous.items.filter(
-        (_, itemIndex) =>
-          itemIndex !== index
-      ),
-    }));
+        items:
+          previous.items.filter(
+            (
+              _,
+              itemIndex
+            ) =>
+              itemIndex !==
+              index
+          ),
+      })
+    );
   };
 
   // ========================================================
@@ -470,44 +950,65 @@ const PurchaseModal = ({
         result,
         currentItem
       ) => {
-        const quantity = Number(
-          currentItem.quantity || 0
-        );
+        const quantity =
+          toNumber(
+            currentItem.quantity,
+            0
+          );
 
-        const unitCost = Number(
-          currentItem.unit_cost || 0
-        );
+        const unitCost =
+          toNumber(
+            currentItem.unit_cost,
+            0
+          );
 
-        const discountRate = Number(
-          currentItem.discount || 0
-        );
+        const discountRate =
+          toNumber(
+            currentItem.discount,
+            0
+          );
 
-        const taxRate = Number(
-          currentItem.tax || 0
-        );
+        const taxRate =
+          toNumber(
+            currentItem.tax,
+            0
+          );
 
         const gross =
-          quantity * unitCost;
+          quantity *
+          unitCost;
 
         const discountAmount =
           gross *
-          (discountRate / 100);
+          (discountRate /
+            100);
 
         const taxableAmount =
-          gross - discountAmount;
+          gross -
+          discountAmount;
 
         const taxAmount =
           taxableAmount *
           (taxRate / 100);
 
         const itemTotal =
-          taxableAmount + taxAmount;
+          taxableAmount +
+          taxAmount;
 
-        result.gross += gross;
-        result.discount += discountAmount;
-        result.subtotal += taxableAmount;
-        result.tax += taxAmount;
-        result.total += itemTotal;
+        result.gross +=
+          gross;
+
+        result.discount +=
+          discountAmount;
+
+        result.subtotal +=
+          taxableAmount;
+
+        result.tax +=
+          taxAmount;
+
+        result.total +=
+          itemTotal;
 
         return result;
       },
@@ -525,10 +1026,11 @@ const PurchaseModal = ({
   // FORMAT CURRENCY
   // ========================================================
 
-  const formatCurrency = (value) => {
-    const amount = Number(
-      value || 0
-    );
+  const formatCurrency = (
+    value
+  ) => {
+    const amount =
+      toNumber(value);
 
     return `TSh ${amount.toLocaleString(
       "en-TZ",
@@ -543,7 +1045,9 @@ const PurchaseModal = ({
   // SUBMIT
   // ========================================================
 
-  const handleSubmit = async (event) => {
+  const handleSubmit = async (
+    event
+  ) => {
     event.preventDefault();
 
     setError("");
@@ -554,7 +1058,8 @@ const PurchaseModal = ({
 
     const purchaseNumber =
       String(
-        form.purchase_number || ""
+        form.purchase_number ||
+          ""
       ).trim();
 
     if (!purchaseNumber) {
@@ -606,7 +1111,9 @@ const PurchaseModal = ({
     // ------------------------------------------------------
 
     if (
-      !Array.isArray(form.items) ||
+      !Array.isArray(
+        form.items
+      ) ||
       form.items.length === 0
     ) {
       setError(
@@ -642,23 +1149,30 @@ const PurchaseModal = ({
         purchaseNumber,
 
       supplier:
-        Number(form.supplier),
+        Number(
+          form.supplier
+        ),
 
       branch:
-        Number(form.branch),
+        Number(
+          form.branch
+        ),
 
       order_date:
         form.order_date,
 
       status:
-        form.status || "received",
+        form.status ||
+        "received",
 
       payment_status:
         form.payment_status ||
         "pending",
 
       notes:
-        form.notes?.trim() || "",
+        String(
+          form.notes || ""
+        ).trim(),
 
       items:
         form.items.map(
@@ -669,27 +1183,33 @@ const PurchaseModal = ({
               ),
 
             quantity:
-              Number(
+              toNumber(
                 currentItem.quantity
               ),
 
+            received_quantity:
+              toNumber(
+                currentItem.received_quantity,
+                0
+              ),
+
             unit_cost:
-              Number(
+              fixedNumber(
                 currentItem.unit_cost
               ),
 
             discount:
-              Number(
-                currentItem.discount || 0
+              fixedNumber(
+                currentItem.discount
               ),
 
             tax:
-              Number(
-                currentItem.tax || 0
+              fixedNumber(
+                currentItem.tax
               ),
 
             total:
-              Number(
+              fixedNumber(
                 currentItem.total
               ),
           })
@@ -705,7 +1225,9 @@ const PurchaseModal = ({
     );
 
     console.log(
-      "PURCHASE PAYLOAD"
+      isEditing
+        ? "UPDATE PURCHASE PAYLOAD"
+        : "CREATE PURCHASE PAYLOAD"
     );
 
     console.log(
@@ -740,14 +1262,58 @@ const PurchaseModal = ({
         err
       );
 
-      setError(
+      console.error(
+        "Backend response:",
         err?.response?.data
-          ? JSON.stringify(
-              err.response.data
-            )
-          : "Failed to save purchase. Please try again."
       );
 
+      const backendError =
+        err?.response?.data;
+
+      if (
+        backendError &&
+        typeof backendError ===
+          "object"
+      ) {
+        const message =
+          Object.entries(
+            backendError
+          )
+            .map(
+              ([
+                field,
+                messages,
+              ]) => {
+                const formatted =
+                  Array.isArray(
+                    messages
+                  )
+                    ? messages.join(
+                        ", "
+                      )
+                    : String(
+                        messages
+                      );
+
+                return `${field}: ${formatted}`;
+              }
+            )
+            .join("\n");
+
+        setError(
+          message ||
+            "Failed to save purchase."
+        );
+      } else {
+        setError(
+          backendError
+            ? String(
+                backendError
+              )
+            : err?.message ||
+                "Failed to save purchase. Please try again."
+        );
+      }
     } finally {
       setSaving(false);
     }
@@ -758,7 +1324,10 @@ const PurchaseModal = ({
   // ========================================================
 
   const handleClose = () => {
-    if (saving) {
+    if (
+      saving ||
+      parentSaving
+    ) {
       return;
     }
 
@@ -778,13 +1347,16 @@ const PurchaseModal = ({
       size="xl"
       centered
       backdrop={
-        saving
+        saving ||
+        parentSaving
           ? "static"
           : true
       }
-      keyboard={!saving}
+      keyboard={
+        !saving &&
+        !parentSaving
+      }
     >
-
       <Form
         onSubmit={handleSubmit}
       >
@@ -794,13 +1366,16 @@ const PurchaseModal = ({
         ================================================== */}
 
         <Modal.Header
-          closeButton={!saving}
+          closeButton={
+            !saving &&
+            !parentSaving
+          }
         >
-
           <Modal.Title>
-            New Purchase
+            {isEditing
+              ? "Edit Purchase"
+              : "New Purchase"}
           </Modal.Title>
-
         </Modal.Header>
 
         {/* ==================================================
@@ -815,12 +1390,14 @@ const PurchaseModal = ({
             <Alert
               variant="danger"
               className="mb-4"
+              style={{
+                whiteSpace:
+                  "pre-line",
+              }}
             >
-
               <i className="bi bi-exclamation-triangle me-2" />
 
               {error}
-
             </Alert>
           )}
 
@@ -828,9 +1405,7 @@ const PurchaseModal = ({
               PURCHASE INFORMATION
           ================================================= */}
 
-          <Card
-            className="border-0 bg-light mb-4"
-          >
+          <Card className="border-0 bg-light mb-4">
 
             <Card.Body>
 
@@ -862,9 +1437,11 @@ const PurchaseModal = ({
                       required
                     />
 
-                    <Form.Text className="text-muted">
-                      Automatically generated.
-                    </Form.Text>
+                    {!isEditing && (
+                      <Form.Text className="text-muted">
+                        Automatically generated.
+                      </Form.Text>
+                    )}
 
                   </Form.Group>
 
@@ -1022,16 +1599,20 @@ const PurchaseModal = ({
                       }
                     >
 
-                      <option value="received">
-                        Received
-                      </option>
-
-                      <option value="pending">
-                        Pending
+                      <option value="draft">
+                        Draft
                       </option>
 
                       <option value="ordered">
                         Ordered
+                      </option>
+
+                      <option value="received">
+                        Received
+                      </option>
+
+                      <option value="partially_received">
+                        Partially Received
                       </option>
 
                       <option value="cancelled">
@@ -1233,7 +1814,7 @@ const PurchaseModal = ({
 
                 {/* DISCOUNT */}
 
-                <Col md={1.5}>
+                <Col md={2}>
 
                   <Form.Group>
 
@@ -1261,7 +1842,7 @@ const PurchaseModal = ({
 
                 {/* TAX */}
 
-                <Col md={1.5}>
+                <Col md={1}>
 
                   <Form.Group>
 
@@ -1298,6 +1879,10 @@ const PurchaseModal = ({
                     onClick={
                       handleAddItem
                     }
+                    disabled={
+                      saving ||
+                      parentSaving
+                    }
                   >
 
                     <i className="bi bi-plus-lg me-1" />
@@ -1319,6 +1904,7 @@ const PurchaseModal = ({
                     <small>
 
                       Gross:{" "}
+
                       <strong>
                         {formatCurrency(
                           currentItemCalculation.gross
@@ -1328,6 +1914,7 @@ const PurchaseModal = ({
                       {" | "}
 
                       Discount:{" "}
+
                       <strong>
                         {formatCurrency(
                           currentItemCalculation.discountAmount
@@ -1337,6 +1924,7 @@ const PurchaseModal = ({
                       {" | "}
 
                       Tax:{" "}
+
                       <strong>
                         {formatCurrency(
                           currentItemCalculation.taxAmount
@@ -1346,6 +1934,7 @@ const PurchaseModal = ({
                       {" | "}
 
                       Total:{" "}
+
                       <strong>
                         {formatCurrency(
                           currentItemCalculation.total
@@ -1373,13 +1962,16 @@ const PurchaseModal = ({
                 Purchase Items
               </h6>
 
-              {form.items.length === 0 ? (
+              {form.items.length ===
+              0 ? (
 
                 <div className="text-center text-muted py-4">
 
                   <i className="bi bi-cart-x fs-2 d-block mb-2" />
 
-                  No products added yet.
+                  {isEditing
+                    ? "No products found for this purchase."
+                    : "No products added yet."}
 
                 </div>
 
@@ -1390,7 +1982,6 @@ const PurchaseModal = ({
                   <Table
                     bordered
                     hover
-                    responsive
                     className="align-middle mb-0"
                   >
 
@@ -1425,7 +2016,8 @@ const PurchaseModal = ({
                         <th
                           className="text-center"
                           style={{
-                            width: "70px",
+                            width:
+                              "70px",
                           }}
                         >
                           Action
@@ -1444,7 +2036,10 @@ const PurchaseModal = ({
                         ) => (
 
                           <tr
-                            key={`${currentItem.product}-${index}`}
+                            key={
+                              currentItem.id ??
+                              `${currentItem.product}-${index}`
+                            }
                           >
 
                             <td>
@@ -1458,9 +2053,9 @@ const PurchaseModal = ({
                             </td>
 
                             <td className="text-end">
-                              {
+                              {toNumber(
                                 currentItem.quantity
-                              }
+                              )}
                             </td>
 
                             <td className="text-end">
@@ -1471,8 +2066,8 @@ const PurchaseModal = ({
 
                             <td className="text-end">
 
-                              {Number(
-                                currentItem.discount || 0
+                              {toNumber(
+                                currentItem.discount
                               ).toFixed(2)}
                               %
 
@@ -1480,8 +2075,8 @@ const PurchaseModal = ({
 
                             <td className="text-end">
 
-                              {Number(
-                                currentItem.tax || 0
+                              {toNumber(
+                                currentItem.tax
                               ).toFixed(2)}
                               %
 
@@ -1508,7 +2103,11 @@ const PurchaseModal = ({
                                     index
                                   )
                                 }
-                                disabled={saving}
+                                disabled={
+                                  saving ||
+                                  parentSaving
+                                }
+                                title="Remove item"
                               >
 
                                 <i className="bi bi-trash" />
@@ -1538,7 +2137,8 @@ const PurchaseModal = ({
               TOTALS
           ================================================= */}
 
-          {form.items.length > 0 && (
+          {form.items.length >
+            0 && (
 
             <Row className="justify-content-end mt-4">
 
@@ -1642,8 +2242,13 @@ const PurchaseModal = ({
           <Button
             type="button"
             variant="secondary"
-            onClick={handleClose}
-            disabled={saving}
+            onClick={
+              handleClose
+            }
+            disabled={
+              saving ||
+              parentSaving
+            }
           >
             Cancel
           </Button>
@@ -1653,11 +2258,14 @@ const PurchaseModal = ({
             variant="primary"
             disabled={
               saving ||
-              form.items.length === 0
+              parentSaving ||
+              form.items.length ===
+                0
             }
           >
 
-            {saving ? (
+            {saving ||
+            parentSaving ? (
               <>
                 <span
                   className="spinner-border spinner-border-sm me-2"
@@ -1665,13 +2273,17 @@ const PurchaseModal = ({
                   aria-hidden="true"
                 />
 
-                Saving...
+                {isEditing
+                  ? "Updating..."
+                  : "Saving..."}
               </>
             ) : (
               <>
                 <i className="bi bi-check-lg me-1" />
 
-                Save Purchase
+                {isEditing
+                  ? "Update Purchase"
+                  : "Save Purchase"}
               </>
             )}
 
