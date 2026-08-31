@@ -160,6 +160,11 @@ const inventoryApi = {
 
     return response.data;
   },
+
+adjustStock: (stockId, data) => {
+    return api.patch(`/inventory/stocks/${stockId}/adjust/`, data);
+  },
+
 };
 
 export default inventoryApi;
