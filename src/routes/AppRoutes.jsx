@@ -6,6 +6,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 // ===============================
 import Dashboard from "../pages/Dashboard";
 import POS from "../pages/POS";
+import Sales from "../pages/Sales";
 import Customers from "../pages/Customers";
 import Reports from "../pages/Reports";
 import Users from "../pages/Users";
@@ -54,6 +55,11 @@ const AppRoutes = () => {
         element={<POS />}
       />
 
+      <Route
+        path="/sales"
+        element={<Sales />}
+      />
+
       {/* ===============================
           INVENTORY
       =============================== */}
@@ -72,8 +78,12 @@ const AppRoutes = () => {
         path="/categories"
         element={<Categories />}
       />
-      <Route path="/brands" 
-      element={<Brands />} />
+
+      <Route
+        path="/brands"
+        element={<Brands />}
+      />
+
       <Route
         path="/purchases"
         element={<Purchases />}
@@ -149,7 +159,7 @@ const AppRoutes = () => {
                 window.location.href = "/dashboard";
               }}
             >
-              <i className="bi bi-grid-1x2-fill"></i>
+              <i className="bi bi-grid-1x2-fill me-2"></i>
               Back to Dashboard
             </button>
 
