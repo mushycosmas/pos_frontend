@@ -1,4 +1,3 @@
-
 import api from "./api";
 
 const inventoryApi = {
@@ -130,11 +129,35 @@ const inventoryApi = {
   },
 
   // =========================================================
+  // ✅ DELETE STOCK MOVEMENT (ADD THIS)
+  // DELETE /inventory/stock-movements/{id}/
+  // =========================================================
+
+  deleteMovement: async (id) => {
+    const response = await api.delete(
+      `/inventory/stock-movements/${id}/`
+    );
+
+    return response.data;
+  },
+
+  // =========================================================
+  // ADJUST STOCK (CUSTOM ENDPOINT)
+  // PATCH /inventory/stocks/{stockId}/adjust/
+  // =========================================================
+
+  adjustStock: async (stockId, data) => {
+    const response = await api.patch(
+      `/inventory/stocks/${stockId}/adjust/`,
+      data
+    );
+
+    return response.data;
+  },
+
+  // =========================================================
   // LOW STOCK
-  //
-  // IMPORTANT:
-  // This endpoint only exists if your StockViewSet
-  // has a @action for low-stock.
+  // GET /inventory/stocks/low-stock/
   // =========================================================
 
   getLowStock: async () => {
@@ -147,10 +170,7 @@ const inventoryApi = {
 
   // =========================================================
   // OUT OF STOCK
-  //
-  // IMPORTANT:
-  // This endpoint only exists if your StockViewSet
-  // has a @action for out-of-stock.
+  // GET /inventory/stocks/out-of-stock/
   // =========================================================
 
   getOutOfStock: async () => {
@@ -160,11 +180,6 @@ const inventoryApi = {
 
     return response.data;
   },
-
-adjustStock: (stockId, data) => {
-    return api.patch(`/inventory/stocks/${stockId}/adjust/`, data);
-  },
-
 };
 
 export default inventoryApi;
