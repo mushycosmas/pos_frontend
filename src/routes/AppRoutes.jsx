@@ -31,6 +31,10 @@ import Categories from "../pages/Categories";
 import Purchases from "../pages/Purchases";
 import Suppliers from "../pages/Suppliers";
 import StockAdjustments from "../pages/StockAdjustments";
+import Return from "../pages/Return";
+
+//Expensis will be here
+import Expenses from "../pages/Expenses";
 
 // ===============================
 // SERVICES
@@ -190,6 +194,14 @@ const AppRoutes = () => {
         }
       />
 
+    <Route
+        path="/returns"
+        element={
+          <ProtectedRoute>
+            <Return />
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/suppliers"
         element={
@@ -220,7 +232,25 @@ const AppRoutes = () => {
           </ProtectedRoute>
         }
       />
-
+       {/* =====================================================
+          EXPENSES
+      ===================================================== */}
+      <Route
+        path="/expenses"
+        element={
+          <ProtectedRoute>
+            <Expenses />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/expenses"
+        element={
+          <ProtectedRoute>
+            <Expenses />
+          </ProtectedRoute>
+        }
+      />
       {/* =====================================================
           REPORTS
       ===================================================== */}
