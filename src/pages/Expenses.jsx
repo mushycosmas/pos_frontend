@@ -82,6 +82,129 @@ const Expenses = () => {
   });
 
   // =========================================================
+  // HELPER FUNCTIONS
+  // =========================================================
+
+  function extractList(data) {
+    if (Array.isArray(data)) {
+      return data;
+    }
+
+    if (Array.isArray(data?.results)) {
+      return data.results;
+    }
+
+    return [];
+  }
+
+  function getExpenseTypeName(type) {
+    const found = EXPENSE_TYPES.find(
+      (item) => item.value === type
+    );
+
+    return found?.label || type || "Other";
+  }
+
+  function getBranchName(expense) {
+    if (expense?.branch_name) {
+      return expense.branch_name;
+    }
+
+    if (
+      expense?.branch &&
+      typeof expense.branch === "object" &&
+      expense.branch.name
+    ) {
+      return expense.branch.name;
+    }
+
+    const branch = branches.find(
+      (item) =>
+        String(item.id) ===
+        String(
+          typeof expense?.branch === "object"
+            ? expense.branch?.id
+            : expense?.branch
+        )
+    );
+
+    return branch?.name || "—";
+  }
+
+  function getCompanyName(expense) {
+    if (expense?.company_name) {
+      return expense.company_name;
+    }
+
+    if (
+      expense?.company &&
+      typeof expense.company === "object" &&
+      expense.company.name
+    ) {
+      return expense.company.name;
+    }
+
+    const company = companies.find(
+      (item) =>
+        String(item.id) ===
+        String(
+          typeof expense?.company === "object"
+            ? expense.company?.id
+            : expense?.company
+        )
+    );
+
+    return company?.name || "—";
+  }
+
+  function getPaymentStatusName(status) {
+    const found = PAYMENT_STATUSES.find(
+      (item) => item.value === status
+    );
+
+    return found?.label || status || "Pending";
+  }
+
+  function formatMoney(value) {
+    return new Intl.NumberFormat("en-TZ", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(Number(value || 0));
+  }
+
+  function formatDate(date) {
+    if (!date) {
+      return "—";
+    }
+
+    const parsedDate = new Date(date);
+
+    if (Number.isNaN(parsedDate.getTime())) {
+      return date;
+    }
+
+    return parsedDate.toLocaleDateString("en-TZ", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  }
+
+  function getExpenseTotal(expense) {
+    if (
+      expense?.total !== null &&
+      expense?.total !== undefined
+    ) {
+      return Number(expense.total);
+    }
+
+    return (
+      Number(expense?.amount || 0) +
+      Number(expense?.tax || 0)
+    );
+  }
+
+  // =========================================================
   // RESET FORM
   // =========================================================
 
@@ -109,22 +232,6 @@ const Expenses = () => {
 
       receipt: null,
     });
-  };
-
-  // =========================================================
-  // EXTRACT LIST FROM API RESPONSE
-  // =========================================================
-
-  const extractList = (data) => {
-    if (Array.isArray(data)) {
-      return data;
-    }
-
-    if (Array.isArray(data?.results)) {
-      return data.results;
-    }
-
-    return [];
   };
 
   // =========================================================
@@ -199,19 +306,25 @@ const Expenses = () => {
     const search = searchTerm.trim().toLowerCase();
 
     return expenses.filter((expense) => {
-      const title = expense.title || "";
-      const description = expense.description || "";
-      const invoiceNumber = expense.invoice_number || "";
-      const reference = expense.reference || "";
+      const title = expense?.title || "";
+      const description = expense?.description || "";
+      const invoiceNumber =
+        expense?.invoice_number || "";
+      const reference = expense?.reference || "";
 
       const expenseType = getExpenseTypeName(
-        expense.expense_type
+        expense?.expense_type
       );
 
       const branchName =
-        expense.branch_name ||
-        expense.branch?.name ||
+        expense?.branch_name ||
+        expense?.branch?.name ||
         getBranchName(expense);
+
+      const companyName =
+        expense?.company_name ||
+        expense?.company?.name ||
+        getCompanyName(expense);
 
       const matchesSearch =
         !search ||
@@ -230,10 +343,13 @@ const Expenses = () => {
           .includes(search) ||
         String(branchName)
           .toLowerCase()
+          .includes(search) ||
+        String(companyName)
+          .toLowerCase()
           .includes(search);
 
       const paymentStatus = String(
-        expense.payment_status || ""
+        expense?.payment_status || ""
       ).toLowerCase();
 
       const matchesStatus =
@@ -247,6 +363,7 @@ const Expenses = () => {
     searchTerm,
     statusFilter,
     branches,
+    companies,
   ]);
 
   // =========================================================
@@ -255,14 +372,7 @@ const Expenses = () => {
 
   const totalExpenses = useMemo(() => {
     return expenses.reduce((total, expense) => {
-      return (
-        total +
-        Number(
-          expense.total ??
-            Number(expense.amount || 0) +
-              Number(expense.tax || 0)
-        )
-      );
+      return total + getExpenseTotal(expense);
     }, 0);
   }, [expenses]);
 
@@ -275,18 +385,11 @@ const Expenses = () => {
       .filter(
         (expense) =>
           String(
-            expense.payment_status || ""
+            expense?.payment_status || ""
           ).toLowerCase() === "paid"
       )
       .reduce((total, expense) => {
-        return (
-          total +
-          Number(
-            expense.total ??
-              Number(expense.amount || 0) +
-                Number(expense.tax || 0)
-          )
-        );
+        return total + getExpenseTotal(expense);
       }, 0);
   }, [expenses]);
 
@@ -299,18 +402,11 @@ const Expenses = () => {
       .filter(
         (expense) =>
           String(
-            expense.payment_status || ""
+            expense?.payment_status || ""
           ).toLowerCase() === "pending"
       )
       .reduce((total, expense) => {
-        return (
-          total +
-          Number(
-            expense.total ??
-              Number(expense.amount || 0) +
-                Number(expense.tax || 0)
-          )
-        );
+        return total + getExpenseTotal(expense);
       }, 0);
   }, [expenses]);
 
@@ -321,135 +417,12 @@ const Expenses = () => {
   const approvedExpenses = useMemo(() => {
     return expenses
       .filter(
-        (expense) =>
-          expense.is_approved === true
+        (expense) => expense?.is_approved === true
       )
       .reduce((total, expense) => {
-        return (
-          total +
-          Number(
-            expense.total ??
-              Number(expense.amount || 0) +
-                Number(expense.tax || 0)
-          )
-        );
+        return total + getExpenseTotal(expense);
       }, 0);
   }, [expenses]);
-
-  // =========================================================
-  // FORMAT MONEY
-  // =========================================================
-
-  const formatMoney = (value) => {
-    return new Intl.NumberFormat("en-TZ", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(Number(value || 0));
-  };
-
-  // =========================================================
-  // FORMAT DATE
-  // =========================================================
-
-  const formatDate = (date) => {
-    if (!date) return "—";
-
-    const parsedDate = new Date(date);
-
-    if (Number.isNaN(parsedDate.getTime())) {
-      return date;
-    }
-
-    return parsedDate.toLocaleDateString("en-TZ", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  };
-
-  // =========================================================
-  // GET BRANCH NAME
-  // =========================================================
-
-  const getBranchName = (expense) => {
-    if (expense.branch_name) {
-      return expense.branch_name;
-    }
-
-    if (
-      expense.branch &&
-      typeof expense.branch === "object" &&
-      expense.branch.name
-    ) {
-      return expense.branch.name;
-    }
-
-    const branch = branches.find(
-      (item) =>
-        String(item.id) ===
-        String(
-          typeof expense.branch === "object"
-            ? expense.branch.id
-            : expense.branch
-        )
-    );
-
-    return branch?.name || "—";
-  };
-
-  // =========================================================
-  // GET COMPANY NAME
-  // =========================================================
-
-  const getCompanyName = (expense) => {
-    if (expense.company_name) {
-      return expense.company_name;
-    }
-
-    if (
-      expense.company &&
-      typeof expense.company === "object" &&
-      expense.company.name
-    ) {
-      return expense.company.name;
-    }
-
-    const company = companies.find(
-      (item) =>
-        String(item.id) ===
-        String(
-          typeof expense.company === "object"
-            ? expense.company.id
-            : expense.company
-        )
-    );
-
-    return company?.name || "—";
-  };
-
-  // =========================================================
-  // GET EXPENSE TYPE
-  // =========================================================
-
-  const getExpenseTypeName = (type) => {
-    const found = EXPENSE_TYPES.find(
-      (item) => item.value === type
-    );
-
-    return found?.label || type || "Other";
-  };
-
-  // =========================================================
-  // GET PAYMENT STATUS NAME
-  // =========================================================
-
-  const getPaymentStatusName = (status) => {
-    const found = PAYMENT_STATUSES.find(
-      (item) => item.value === status
-    );
-
-    return found?.label || status || "Pending";
-  };
 
   // =========================================================
   // OPEN ADD MODAL
@@ -473,26 +446,26 @@ const Expenses = () => {
     setEditingExpense(expense);
 
     setFormData({
-      title: expense.title || "",
+      title: expense?.title || "",
 
-      description: expense.description || "",
+      description: expense?.description || "",
 
       expense_type:
-        expense.expense_type || "other",
+        expense?.expense_type || "other",
 
       amount:
-        expense.amount !== null &&
-        expense.amount !== undefined
+        expense?.amount !== null &&
+        expense?.amount !== undefined
           ? String(expense.amount)
           : "",
 
       tax:
-        expense.tax !== null &&
-        expense.tax !== undefined
+        expense?.tax !== null &&
+        expense?.tax !== undefined
           ? String(expense.tax)
           : "0",
 
-      expense_date: expense.expense_date
+      expense_date: expense?.expense_date
         ? String(expense.expense_date).substring(
             0,
             10
@@ -501,7 +474,7 @@ const Expenses = () => {
             .toISOString()
             .split("T")[0],
 
-      due_date: expense.due_date
+      due_date: expense?.due_date
         ? String(expense.due_date).substring(
             0,
             10
@@ -509,32 +482,32 @@ const Expenses = () => {
         : "",
 
       branch:
-        expense.branch !== null &&
-        expense.branch !== undefined
+        expense?.branch !== null &&
+        expense?.branch !== undefined
           ? String(
               typeof expense.branch === "object"
-                ? expense.branch.id
+                ? expense.branch?.id
                 : expense.branch
             )
           : "",
 
       company:
-        expense.company !== null &&
-        expense.company !== undefined
+        expense?.company !== null &&
+        expense?.company !== undefined
           ? String(
               typeof expense.company === "object"
-                ? expense.company.id
+                ? expense.company?.id
                 : expense.company
             )
           : "",
 
       payment_status:
-        expense.payment_status || "pending",
+        expense?.payment_status || "pending",
 
       payment_method:
-        expense.payment_method || "",
+        expense?.payment_method || "",
 
-      payment_date: expense.payment_date
+      payment_date: expense?.payment_date
         ? String(expense.payment_date).substring(
             0,
             10
@@ -542,9 +515,9 @@ const Expenses = () => {
         : "",
 
       invoice_number:
-        expense.invoice_number || "",
+        expense?.invoice_number || "",
 
-      reference: expense.reference || "",
+      reference: expense?.reference || "",
 
       receipt: null,
     });
@@ -560,7 +533,9 @@ const Expenses = () => {
   // =========================================================
 
   const handleCloseModal = () => {
-    if (saving) return;
+    if (saving) {
+      return;
+    }
 
     setShowModal(false);
     setEditingExpense(null);
@@ -605,8 +580,16 @@ const Expenses = () => {
       return "Expense amount is required.";
     }
 
+    if (Number.isNaN(Number(formData.amount))) {
+      return "Expense amount must be a valid number.";
+    }
+
     if (Number(formData.amount) < 0) {
       return "Expense amount cannot be negative.";
+    }
+
+    if (Number.isNaN(Number(formData.tax || 0))) {
+      return "Tax must be a valid number.";
     }
 
     if (Number(formData.tax || 0) < 0) {
@@ -636,8 +619,7 @@ const Expenses = () => {
     const payload = {
       title: formData.title.trim(),
 
-      description:
-        formData.description.trim(),
+      description: formData.description.trim(),
 
       expense_type: formData.expense_type,
 
@@ -645,41 +627,29 @@ const Expenses = () => {
 
       tax: formData.tax || "0",
 
-      expense_date:
-        formData.expense_date,
+      expense_date: formData.expense_date,
 
-      due_date:
-        formData.due_date || null,
+      due_date: formData.due_date || null,
 
       branch: Number(formData.branch),
 
-      payment_status:
-        formData.payment_status,
+      payment_status: formData.payment_status,
 
       payment_method:
-        formData.payment_method.trim() ||
-        null,
+        formData.payment_method.trim() || null,
 
-      payment_date:
-        formData.payment_date || null,
+      payment_date: formData.payment_date || null,
 
       invoice_number:
-        formData.invoice_number.trim() ||
-        null,
+        formData.invoice_number.trim() || null,
 
       reference:
-        formData.reference.trim() ||
-        null,
-    };
+        formData.reference.trim() || null,
 
-    // Company is optional.
-    if (formData.company) {
-      payload.company = Number(
-        formData.company
-      );
-    } else {
-      payload.company = null;
-    }
+      company: formData.company
+        ? Number(formData.company)
+        : null,
+    };
 
     return payload;
   };
@@ -691,8 +661,7 @@ const Expenses = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    const validationError =
-      validateForm();
+    const validationError = validateForm();
 
     if (validationError) {
       setError(validationError);
@@ -704,8 +673,7 @@ const Expenses = () => {
       setError("");
       setSuccess("");
 
-      const payload =
-        preparePayload();
+      const payload = preparePayload();
 
       let response;
 
@@ -714,8 +682,7 @@ const Expenses = () => {
       // -----------------------------------------------------
 
       if (formData.receipt) {
-        const formDataPayload =
-          new FormData();
+        const formDataPayload = new FormData();
 
         Object.entries(payload).forEach(
           ([key, value]) => {
@@ -723,10 +690,7 @@ const Expenses = () => {
               value !== null &&
               value !== undefined
             ) {
-              formDataPayload.append(
-                key,
-                value
-              );
+              formDataPayload.append(key, value);
             }
           }
         );
@@ -774,20 +738,21 @@ const Expenses = () => {
             );
         } else {
           response =
-            await expensesApi.create(
-              payload
-            );
+            await expensesApi.create(payload);
         }
       }
 
       const savedExpense =
         response?.data || response;
 
+      // -----------------------------------------------------
+      // UPDATE EXISTING EXPENSE
+      // -----------------------------------------------------
+
       if (editingExpense) {
         setExpenses((prev) =>
           prev.map((expense) =>
-            expense.id ===
-            editingExpense.id
+            expense.id === editingExpense.id
               ? savedExpense
               : expense
           )
@@ -796,7 +761,13 @@ const Expenses = () => {
         setSuccess(
           "Expense updated successfully."
         );
-      } else {
+      }
+
+      // -----------------------------------------------------
+      // CREATE NEW EXPENSE
+      // -----------------------------------------------------
+
+      else {
         setExpenses((prev) => [
           savedExpense,
           ...prev,
@@ -868,29 +839,25 @@ const Expenses = () => {
   // DELETE EXPENSE
   // =========================================================
 
-  const handleDelete = async (
-    expense
-  ) => {
-    const confirmed =
-      window.confirm(
-        `Are you sure you want to delete "${expense.title}"?`
-      );
+  const handleDelete = async (expense) => {
+    const confirmed = window.confirm(
+      `Are you sure you want to delete "${expense.title}"?`
+    );
 
-    if (!confirmed) return;
+    if (!confirmed) {
+      return;
+    }
 
     try {
       setDeleting(true);
       setError("");
       setSuccess("");
 
-      await expensesApi.delete(
-        expense.id
-      );
+      await expensesApi.delete(expense.id);
 
       setExpenses((prev) =>
         prev.filter(
-          (item) =>
-            item.id !== expense.id
+          (item) => item.id !== expense.id
         )
       );
 
@@ -916,9 +883,7 @@ const Expenses = () => {
   // PAYMENT STATUS BADGE
   // =========================================================
 
-  const renderPaymentStatusBadge = (
-    status
-  ) => {
+  const renderPaymentStatusBadge = (status) => {
     const normalized = String(
       status || ""
     ).toLowerCase();
@@ -931,9 +896,7 @@ const Expenses = () => {
       );
     }
 
-    if (
-      normalized === "partially_paid"
-    ) {
+    if (normalized === "partially_paid") {
       return (
         <span className="badge bg-info text-dark">
           Partially Paid
@@ -960,10 +923,8 @@ const Expenses = () => {
   // APPROVAL BADGE
   // =========================================================
 
-  const renderApprovalBadge = (
-    expense
-  ) => {
-    if (expense.is_rejected) {
+  const renderApprovalBadge = (expense) => {
+    if (expense?.is_rejected) {
       return (
         <span className="badge bg-danger">
           Rejected
@@ -971,7 +932,7 @@ const Expenses = () => {
       );
     }
 
-    if (expense.is_approved) {
+    if (expense?.is_approved) {
       return (
         <span className="badge bg-success">
           Approved
@@ -1033,9 +994,7 @@ const Expenses = () => {
           <button
             type="button"
             className="btn-close"
-            onClick={() =>
-              setError("")
-            }
+            onClick={() => setError("")}
           ></button>
         </div>
       )}
@@ -1052,9 +1011,7 @@ const Expenses = () => {
           <button
             type="button"
             className="btn-close"
-            onClick={() =>
-              setSuccess("")
-            }
+            onClick={() => setSuccess("")}
           ></button>
         </div>
       )}
@@ -1076,9 +1033,7 @@ const Expenses = () => {
 
                 <h4 className="mb-0">
                   TSh{" "}
-                  {formatMoney(
-                    totalExpenses
-                  )}
+                  {formatMoney(totalExpenses)}
                 </h4>
               </div>
 
@@ -1101,9 +1056,7 @@ const Expenses = () => {
 
                 <h4 className="mb-0 text-success">
                   TSh{" "}
-                  {formatMoney(
-                    paidExpenses
-                  )}
+                  {formatMoney(paidExpenses)}
                 </h4>
               </div>
 
@@ -1126,9 +1079,7 @@ const Expenses = () => {
 
                 <h4 className="mb-0 text-warning">
                   TSh{" "}
-                  {formatMoney(
-                    pendingExpenses
-                  )}
+                  {formatMoney(pendingExpenses)}
                 </h4>
               </div>
 
@@ -1181,8 +1132,7 @@ const Expenses = () => {
             <small className="text-muted">
               {filteredExpenses.length}{" "}
               expense
-              {filteredExpenses.length !==
-              1
+              {filteredExpenses.length !== 1
                 ? "s"
                 : ""}
             </small>
@@ -1205,9 +1155,7 @@ const Expenses = () => {
                 type="text"
                 className="form-control"
                 placeholder="Search expenses..."
-                value={
-                  searchTerm
-                }
+                value={searchTerm}
                 onChange={(e) =>
                   setSearchTerm(
                     e.target.value
@@ -1235,9 +1183,7 @@ const Expenses = () => {
               style={{
                 minWidth: "180px",
               }}
-              value={
-                statusFilter
-              }
+              value={statusFilter}
               onChange={(e) =>
                 setStatusFilter(
                   e.target.value
@@ -1251,12 +1197,8 @@ const Expenses = () => {
               {PAYMENT_STATUSES.map(
                 (status) => (
                   <option
-                    key={
-                      status.value
-                    }
-                    value={
-                      status.value
-                    }
+                    key={status.value}
+                    value={status.value}
                   >
                     {status.label}
                   </option>
@@ -1285,8 +1227,7 @@ const Expenses = () => {
               Loading expenses...
             </p>
           </div>
-        ) : filteredExpenses.length ===
-          0 ? (
+        ) : filteredExpenses.length === 0 ? (
           /* =================================================
              EMPTY STATE
           ================================================== */
@@ -1303,29 +1244,24 @@ const Expenses = () => {
 
             <h5>
               {searchTerm ||
-              statusFilter !==
-                "all"
+              statusFilter !== "all"
                 ? "No expenses found"
                 : "No expenses yet"}
             </h5>
 
             <p className="text-muted">
               {searchTerm ||
-              statusFilter !==
-                "all"
+              statusFilter !== "all"
                 ? "Try changing your search or filter."
                 : "Add your first expense to get started."}
             </p>
 
             {!searchTerm &&
-              statusFilter ===
-                "all" && (
+              statusFilter === "all" && (
                 <button
                   type="button"
                   className="primary-button"
-                  onClick={
-                    handleAddExpense
-                  }
+                  onClick={handleAddExpense}
                 >
                   <i className="bi bi-plus-circle me-2"></i>
                   Add Expense
@@ -1357,14 +1293,9 @@ const Expenses = () => {
 
               <tbody>
                 {filteredExpenses.map(
-                  (
-                    expense,
-                    index
-                  ) => (
+                  (expense, index) => (
                     <tr
-                      key={
-                        expense.id
-                      }
+                      key={expense.id}
                     >
                       {/* NUMBER */}
 
@@ -1393,8 +1324,7 @@ const Expenses = () => {
                             <small className="text-muted">
                               {expense
                                 .description
-                                .length >
-                              60
+                                .length > 60
                                 ? `${expense.description.substring(
                                     0,
                                     60
@@ -1412,10 +1342,8 @@ const Expenses = () => {
                           <div
                             className="rounded-circle bg-light d-flex align-items-center justify-content-center me-2"
                             style={{
-                              width:
-                                "36px",
-                              height:
-                                "36px",
+                              width: "36px",
+                              height: "36px",
                             }}
                           >
                             <i className="bi bi-receipt"></i>
@@ -1452,21 +1380,14 @@ const Expenses = () => {
                         <span className="fw-semibold">
                           TSh{" "}
                           {formatMoney(
-                            expense.total ??
-                              Number(
-                                expense.amount ||
-                                  0
-                              ) +
-                                Number(
-                                  expense.tax ||
-                                    0
-                                )
+                            getExpenseTotal(
+                              expense
+                            )
                           )}
                         </span>
 
                         {Number(
-                          expense.tax ||
-                            0
+                          expense.tax || 0
                         ) > 0 && (
                           <small className="d-block text-muted">
                             Tax: TSh{" "}
@@ -1555,16 +1476,8 @@ const Expenses = () => {
                           expense
                         ) =>
                           total +
-                          Number(
-                            expense.total ??
-                              Number(
-                                expense.amount ||
-                                  0
-                              ) +
-                                Number(
-                                  expense.tax ||
-                                    0
-                                )
+                          getExpenseTotal(
+                            expense
                           ),
                         0
                       )
@@ -1627,11 +1540,7 @@ const Expenses = () => {
 
               {/* FORM */}
 
-              <form
-                onSubmit={
-                  handleSubmit
-                }
-              >
+              <form onSubmit={handleSubmit}>
                 <div className="modal-body">
                   <div className="row g-3">
                     {/* TITLE */}

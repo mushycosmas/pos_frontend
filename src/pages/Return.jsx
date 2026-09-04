@@ -23,6 +23,12 @@ import salesApi from "../services/SalesApi";
 import returnApi from "../services/returnApi";
 
 // =========================================================
+// CONSTANTS
+// =========================================================
+
+const PAGE_SIZE = 20;
+
+// =========================================================
 // HELPERS
 // =========================================================
 
@@ -184,7 +190,6 @@ const getSaleItems = (sale) => {
     return sale.saleItems;
   }
 
-  // Support wrapped API responses
   if (Array.isArray(sale?.data?.items)) {
     return sale.data.items;
   }
@@ -353,9 +358,7 @@ const getReturnStatusVariant = (
 const StatusBadge = ({ status }) => {
   return (
     <Badge
-      bg={getReturnStatusVariant(
-        status
-      )}
+      bg={getReturnStatusVariant(status)}
     >
       {String(status || "-")
         .replaceAll("_", " ")
@@ -402,9 +405,7 @@ const extractErrorMessage = (
             value &&
             typeof value === "object"
           ) {
-            text = JSON.stringify(
-              value
-            );
+            text = JSON.stringify(value);
           } else {
             text = String(value);
           }
@@ -470,8 +471,6 @@ const Return = () => {
   const [page, setPage] =
     useState(1);
 
-  const pageSize = 20;
-
   const [pagination, setPagination] =
     useState({
       count: 0,
@@ -480,7 +479,7 @@ const Return = () => {
     });
 
   // =======================================================
-  // CREATE RETURN MODAL
+  // CREATE RETURN MODAL STATE
   // =======================================================
 
   const [
@@ -513,7 +512,7 @@ const Return = () => {
     useState("");
 
   // =======================================================
-  // DETAILS MODAL
+  // DETAILS MODAL STATE
   // =======================================================
 
   const [
@@ -528,15 +527,15 @@ const Return = () => {
   // LOAD RETURNS
   // =======================================================
 
-  const loadReturns =
-    useCallback(async () => {
+  const loadReturns = useCallback(
+    async () => {
       setLoading(true);
       setError("");
 
       try {
         const params = {
           page,
-          page_size: pageSize,
+          page_size: PAGE_SIZE,
         };
 
         if (search.trim()) {
@@ -649,13 +648,19 @@ const Return = () => {
       } finally {
         setLoading(false);
       }
-    }, [
+    },
+    [
       page,
       search,
       statusFilter,
       dateFrom,
       dateTo,
-    ]);
+    ]
+  );
+
+  // =======================================================
+  // INITIAL LOAD
+  // =======================================================
 
   useEffect(() => {
     loadReturns();
@@ -865,24 +870,6 @@ const Return = () => {
     setError("");
     setSuccess("");
     setSelectedItems({});
-
-    /*
-     * IMPORTANT:
-     *
-     * DO NOT call:
-     *
-     * salesApi.getById(saleId)
-     *
-     * The sales list endpoint now returns nested
-     * `items` through SaleListSerializer.
-     *
-     * Calling GET /sales/<id>/ was causing:
-     *
-     * 405 Method Not Allowed
-     *
-     * So we use the sale returned by the search
-     * endpoint directly.
-     */
 
     console.log(
       "RETURN - SELECTED SALE:",
@@ -1402,7 +1389,7 @@ const Return = () => {
       Math.ceil(
         Number(
           pagination.count || 0
-        ) / pageSize
+        ) / PAGE_SIZE
       )
     );
 
@@ -1504,7 +1491,7 @@ const Return = () => {
 
       <Row className="g-3 mb-4">
 
-        <Col md={6} lg={2.4}>
+        <Col md={6} lg={2}>
           <Card className="h-100 shadow-sm">
             <Card.Body>
               <div className="text-muted small">
@@ -1518,7 +1505,7 @@ const Return = () => {
           </Card>
         </Col>
 
-        <Col md={6} lg={2.4}>
+        <Col md={6} lg={2}>
           <Card className="h-100 shadow-sm">
             <Card.Body>
               <div className="text-muted small">
@@ -1532,7 +1519,7 @@ const Return = () => {
           </Card>
         </Col>
 
-        <Col md={6} lg={2.4}>
+        <Col md={6} lg={2}>
           <Card className="h-100 shadow-sm">
             <Card.Body>
               <div className="text-muted small">
@@ -1546,7 +1533,7 @@ const Return = () => {
           </Card>
         </Col>
 
-        <Col md={6} lg={2.4}>
+        <Col md={6} lg={2}>
           <Card className="h-100 shadow-sm">
             <Card.Body>
               <div className="text-muted small">
@@ -1560,7 +1547,7 @@ const Return = () => {
           </Card>
         </Col>
 
-        <Col md={6} lg={2.4}>
+        <Col md={6} lg={4}>
           <Card className="h-100 shadow-sm">
             <Card.Body>
               <div className="text-muted small">
@@ -1876,6 +1863,9 @@ const Return = () => {
                                 returnItem
                               )
                             }
+                            disabled={
+                              actionLoading
+                            }
                           >
                             View
                           </Button>
@@ -1960,7 +1950,9 @@ const Return = () => {
 
         <Modal.Body>
 
+          {/* ================================================= */}
           {/* SALE SEARCH */}
+          {/* ================================================= */}
 
           {!selectedSale && (
             <>
@@ -2020,7 +2012,9 @@ const Return = () => {
                 </Card.Body>
               </Card>
 
+              {/* ================================================= */}
               {/* SEARCH RESULTS */}
+              {/* ================================================= */}
 
               {saleResults.length >
                 0 && (
@@ -2075,11 +2069,6 @@ const Return = () => {
                           (sale) => {
                             const saleId =
                               getSaleId(
-                                sale
-                              );
-
-                            const saleItems =
-                              getSaleItems(
                                 sale
                               );
 
@@ -2177,7 +2166,9 @@ const Return = () => {
             </>
           )}
 
+          {/* ================================================= */}
           {/* SELECTED SALE */}
+          {/* ================================================= */}
 
           {selectedSale && (
             <>
@@ -2258,7 +2249,9 @@ const Return = () => {
                 </Card.Body>
               </Card>
 
+              {/* ================================================= */}
               {/* RETURN ITEMS */}
+              {/* ================================================= */}
 
               <Card className="mb-3">
 
@@ -2478,7 +2471,9 @@ const Return = () => {
                 </div>
               </Card>
 
+              {/* ================================================= */}
               {/* RETURN INFORMATION */}
+              {/* ================================================= */}
 
               <Card>
                 <Card.Header>
