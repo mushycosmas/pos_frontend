@@ -134,6 +134,27 @@ const getBranchName = (sale) => {
   );
 };
 
+// =========================================================
+// SOLD BY
+// =========================================================
+
+const getSoldBy = (sale) => {
+  return (
+    sale?.created_by_name ??
+    sale?.createdByName ??
+    sale?.created_by?.name ??
+    sale?.created_by?.full_name ??
+    sale?.created_by?.username ??
+    sale?.createdBy?.name ??
+    sale?.createdBy?.full_name ??
+    sale?.createdBy?.username ??
+    sale?.seller?.name ??
+    sale?.seller?.full_name ??
+    sale?.seller?.username ??
+    "-"
+  );
+};
+
 const getStatus = (sale) => {
   return (
     sale?.status ??
@@ -477,9 +498,6 @@ const Sales = () => {
 
   // =======================================================
   // FILTER CURRENT RESULTS
-  //
-  // This is useful if the backend doesn't implement
-  // search/filtering exactly as expected.
   // =======================================================
 
   const filteredSales = useMemo(() => {
@@ -507,6 +525,11 @@ const Sales = () => {
             getBranchName(sale)
           ).toLowerCase();
 
+        const soldBy =
+          String(
+            getSoldBy(sale)
+          ).toLowerCase();
+
         const paymentMethod =
           String(
             getPaymentMethod(sale)
@@ -520,6 +543,9 @@ const Sales = () => {
             keyword
           ) ||
           branch.includes(
+            keyword
+          ) ||
+          soldBy.includes(
             keyword
           ) ||
           paymentMethod.includes(
@@ -590,9 +616,11 @@ const Sales = () => {
       setSelectedSale(
         sale
       );
+
       setShowViewModal(
         true
       );
+
       return;
     }
 
@@ -659,6 +687,7 @@ const Sales = () => {
       setError(
         "Sale ID is missing."
       );
+
       return;
     }
 
@@ -920,7 +949,7 @@ const Sales = () => {
                         .value
                     )
                   }
-                  placeholder="Invoice, customer, branch..."
+                  placeholder="Invoice, customer, branch, sold by..."
                 />
               </InputGroup>
             </Col>
@@ -1134,6 +1163,10 @@ const Sales = () => {
                 </th>
 
                 <th>
+                  SOLD BY
+                </th>
+
+                <th>
                   ITEMS
                 </th>
 
@@ -1163,7 +1196,7 @@ const Sales = () => {
                 0 ? (
                 <tr>
                   <td
-                    colSpan="9"
+                    colSpan="10"
                     className="text-center py-5"
                   >
                     <Spinner
@@ -1180,7 +1213,7 @@ const Sales = () => {
                 0 ? (
                 <tr>
                   <td
-                    colSpan="9"
+                    colSpan="10"
                     className="text-center py-5"
                   >
                     <i
@@ -1248,6 +1281,18 @@ const Sales = () => {
                               sale
                             )
                           }
+                        </td>
+
+                        {/* SOLD BY */}
+
+                        <td>
+                          <span className="fw-semibold">
+                            {
+                              getSoldBy(
+                                sale
+                              )
+                            }
+                          </span>
                         </td>
 
                         {/* ITEMS */}
@@ -1389,8 +1434,7 @@ const Sales = () => {
                     (previous) =>
                       Math.max(
                         1,
-                        previous -
-                          1
+                        previous - 1
                       )
                   )
                 }
@@ -1409,8 +1453,7 @@ const Sales = () => {
                 onClick={() =>
                   setPage(
                     (previous) =>
-                      previous +
-                      1
+                      previous + 1
                   )
                 }
               >
@@ -1509,6 +1552,24 @@ const Sales = () => {
                   <div className="fw-bold">
                     {
                       getBranchName(
+                        selectedSale
+                      )
+                    }
+                  </div>
+                </Col>
+
+                {/* SOLD BY */}
+
+                <Col
+                  md={6}
+                >
+                  <small className="text-muted">
+                    Sold By
+                  </small>
+
+                  <div className="fw-bold">
+                    {
+                      getSoldBy(
                         selectedSale
                       )
                     }
@@ -1853,4 +1914,3 @@ const Sales = () => {
 };
 
 export default Sales;
-

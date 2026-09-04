@@ -264,7 +264,7 @@ const AppRoutes = () => {
       ===================================================== */}
 
       <Route
-        path="/settings/payment-methods"
+        path="/payment-methods"
         element={
           <ProtectedRoute>
             <PaymentMethod />

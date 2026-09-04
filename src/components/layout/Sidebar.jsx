@@ -162,7 +162,7 @@ const Sidebar = () => {
         {
           name: 'Payment Methods',
           icon: 'bi-credit-card-2-front',
-          path: '/settings/payment-methods',
+          path: '/payment-methods',
         },
         {
           name: 'Settings',
