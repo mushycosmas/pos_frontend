@@ -84,7 +84,7 @@ const Expenses = () => {
   // HELPER FUNCTIONS
   // =========================================================
 
-  function extractList(data) {
+  const extractList = (data) => {
     if (Array.isArray(data)) {
       return data;
     }
@@ -94,17 +94,25 @@ const Expenses = () => {
     }
 
     return [];
-  }
+  };
 
-  function getExpenseTypeName(type) {
+  const getExpenseTypeName = (type) => {
     const found = EXPENSE_TYPES.find(
       (item) => item.value === type
     );
 
     return found?.label || type || "Other";
-  }
+  };
 
-  function getBranchName(expense) {
+  const getPaymentStatusName = (status) => {
+    const found = PAYMENT_STATUSES.find(
+      (item) => item.value === status
+    );
+
+    return found?.label || status || "Pending";
+  };
+
+  const getBranchName = (expense) => {
     if (expense?.branch_name) {
       return expense.branch_name;
     }
@@ -117,35 +125,64 @@ const Expenses = () => {
       return expense.branch.name;
     }
 
+    const branchId =
+      typeof expense?.branch === "object"
+        ? expense.branch?.id
+        : expense?.branch;
+
     const branch = branches.find(
-      (item) =>
-        String(item.id) ===
-        String(
-          typeof expense?.branch === "object"
-            ? expense.branch?.id
-            : expense?.branch
-        )
+      (item) => String(item.id) === String(branchId)
     );
 
     return branch?.name || "—";
-  }
+  };
 
-  function getPaymentStatusName(status) {
-    const found = PAYMENT_STATUSES.find(
-      (item) => item.value === status
-    );
+  const getUserName = (user, fallback = "—") => {
+    if (!user) {
+      return fallback;
+    }
 
-    return found?.label || status || "Pending";
-  }
+    if (typeof user === "string") {
+      return user;
+    }
 
-  function formatMoney(value) {
+    if (typeof user === "object") {
+      return (
+        user.full_name ||
+        user.name ||
+        user.username ||
+        user.email ||
+        fallback
+      );
+    }
+
+    return fallback;
+  };
+
+  const getCreatedByName = (expense) => {
+    if (expense?.created_by_name) {
+      return expense.created_by_name;
+    }
+
+    return getUserName(expense?.created_by);
+  };
+
+  const getUpdatedByName = (expense) => {
+    if (expense?.updated_by_name) {
+      return expense.updated_by_name;
+    }
+
+    return getUserName(expense?.updated_by);
+  };
+
+  const formatMoney = (value) => {
     return new Intl.NumberFormat("en-TZ", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(Number(value || 0));
-  }
+  };
 
-  function formatDate(date) {
+  const formatDate = (date) => {
     if (!date) {
       return "—";
     }
@@ -161,9 +198,9 @@ const Expenses = () => {
       month: "short",
       day: "numeric",
     });
-  }
+  };
 
-  function getExpenseTotal(expense) {
+  const getExpenseTotal = (expense) => {
     if (
       expense?.total !== null &&
       expense?.total !== undefined
@@ -175,7 +212,7 @@ const Expenses = () => {
       Number(expense?.amount || 0) +
       Number(expense?.tax || 0)
     );
-  }
+  };
 
   // =========================================================
   // RESET FORM
@@ -215,9 +252,9 @@ const Expenses = () => {
       setLoading(true);
       setError("");
 
-      const data = await expensesApi.getAll();
+      const response = await expensesApi.getAll();
 
-      setExpenses(extractList(data));
+      setExpenses(extractList(response));
     } catch (err) {
       console.error("Failed to load expenses:", err);
 
@@ -238,9 +275,9 @@ const Expenses = () => {
     try {
       setLoadingOptions(true);
 
-      const data = await branchesApi.getAll();
+      const response = await branchesApi.getAll();
 
-      setBranches(extractList(data));
+      setBranches(extractList(response));
     } catch (err) {
       console.error("Failed to load branches:", err);
 
@@ -272,39 +309,28 @@ const Expenses = () => {
     return expenses.filter((expense) => {
       const title = expense?.title || "";
       const description = expense?.description || "";
-      const invoiceNumber =
-        expense?.invoice_number || "";
+      const invoiceNumber = expense?.invoice_number || "";
       const reference = expense?.reference || "";
 
       const expenseType = getExpenseTypeName(
         expense?.expense_type
       );
 
-      const branchName =
-        expense?.branch_name ||
-        expense?.branch?.name ||
-        getBranchName(expense);
+      const branchName = getBranchName(expense);
+
+      const createdBy = getCreatedByName(expense);
+      const updatedBy = getUpdatedByName(expense);
 
       const matchesSearch =
         !search ||
-        String(title)
-          .toLowerCase()
-          .includes(search) ||
-        String(expenseType)
-          .toLowerCase()
-          .includes(search) ||
-        String(description)
-          .toLowerCase()
-          .includes(search) ||
-        String(invoiceNumber)
-          .toLowerCase()
-          .includes(search) ||
-        String(reference)
-          .toLowerCase()
-          .includes(search) ||
-        String(branchName)
-          .toLowerCase()
-          .includes(search);
+        String(title).toLowerCase().includes(search) ||
+        String(expenseType).toLowerCase().includes(search) ||
+        String(description).toLowerCase().includes(search) ||
+        String(invoiceNumber).toLowerCase().includes(search) ||
+        String(reference).toLowerCase().includes(search) ||
+        String(branchName).toLowerCase().includes(search) ||
+        String(createdBy).toLowerCase().includes(search) ||
+        String(updatedBy).toLowerCase().includes(search);
 
       const paymentStatus = String(
         expense?.payment_status || ""
@@ -324,61 +350,55 @@ const Expenses = () => {
   ]);
 
   // =========================================================
-  // TOTAL EXPENSES
+  // STATISTICS
   // =========================================================
 
   const totalExpenses = useMemo(() => {
-    return expenses.reduce((total, expense) => {
-      return total + getExpenseTotal(expense);
-    }, 0);
+    return expenses.reduce(
+      (total, expense) =>
+        total + getExpenseTotal(expense),
+      0
+    );
   }, [expenses]);
-
-  // =========================================================
-  // PAID EXPENSES
-  // =========================================================
 
   const paidExpenses = useMemo(() => {
     return expenses
       .filter(
         (expense) =>
-          String(
-            expense?.payment_status || ""
-          ).toLowerCase() === "paid"
+          String(expense?.payment_status || "").toLowerCase() ===
+          "paid"
       )
-      .reduce((total, expense) => {
-        return total + getExpenseTotal(expense);
-      }, 0);
+      .reduce(
+        (total, expense) =>
+          total + getExpenseTotal(expense),
+        0
+      );
   }, [expenses]);
-
-  // =========================================================
-  // PENDING EXPENSES
-  // =========================================================
 
   const pendingExpenses = useMemo(() => {
     return expenses
       .filter(
         (expense) =>
-          String(
-            expense?.payment_status || ""
-          ).toLowerCase() === "pending"
+          String(expense?.payment_status || "").toLowerCase() ===
+          "pending"
       )
-      .reduce((total, expense) => {
-        return total + getExpenseTotal(expense);
-      }, 0);
+      .reduce(
+        (total, expense) =>
+          total + getExpenseTotal(expense),
+        0
+      );
   }, [expenses]);
-
-  // =========================================================
-  // APPROVED EXPENSES
-  // =========================================================
 
   const approvedExpenses = useMemo(() => {
     return expenses
       .filter(
         (expense) => expense?.is_approved === true
       )
-      .reduce((total, expense) => {
-        return total + getExpenseTotal(expense);
-      }, 0);
+      .reduce(
+        (total, expense) =>
+          total + getExpenseTotal(expense),
+        0
+      );
   }, [expenses]);
 
   // =========================================================
@@ -423,19 +443,11 @@ const Expenses = () => {
           : "0",
 
       expense_date: expense?.expense_date
-        ? String(expense.expense_date).substring(
-            0,
-            10
-          )
-        : new Date()
-            .toISOString()
-            .split("T")[0],
+        ? String(expense.expense_date).substring(0, 10)
+        : new Date().toISOString().split("T")[0],
 
       due_date: expense?.due_date
-        ? String(expense.due_date).substring(
-            0,
-            10
-          )
+        ? String(expense.due_date).substring(0, 10)
         : "",
 
       branch:
@@ -455,16 +467,14 @@ const Expenses = () => {
         expense?.payment_method || "",
 
       payment_date: expense?.payment_date
-        ? String(expense.payment_date).substring(
-            0,
-            10
-          )
+        ? String(expense.payment_date).substring(0, 10)
         : "",
 
       invoice_number:
         expense?.invoice_number || "",
 
-      reference: expense?.reference || "",
+      reference:
+        expense?.reference || "",
 
       receipt: null,
     });
@@ -596,6 +606,50 @@ const Expenses = () => {
   };
 
   // =========================================================
+  // GET API ERROR
+  // =========================================================
+
+  const getApiErrorMessage = (err) => {
+    const apiError = err?.response?.data;
+
+    if (!apiError) {
+      return "Failed to save expense. Please try again.";
+    }
+
+    if (typeof apiError === "string") {
+      return apiError;
+    }
+
+    if (
+      typeof apiError === "object" &&
+      apiError !== null
+    ) {
+      if (apiError.detail) {
+        return apiError.detail;
+      }
+
+      return Object.entries(apiError)
+        .map(([field, message]) => {
+          if (Array.isArray(message)) {
+            return `${field}: ${message.join(", ")}`;
+          }
+
+          if (
+            typeof message === "object" &&
+            message !== null
+          ) {
+            return `${field}: ${JSON.stringify(message)}`;
+          }
+
+          return `${field}: ${message}`;
+        })
+        .join(" | ");
+    }
+
+    return "Failed to save expense. Please try again.";
+  };
+
+  // =========================================================
   // SAVE EXPENSE
   // =========================================================
 
@@ -619,11 +673,11 @@ const Expenses = () => {
       let response;
 
       // =====================================================
-      // RECEIPT ATTACHED
+      // WITH RECEIPT
       // =====================================================
 
       if (formData.receipt) {
-        const formDataPayload = new FormData();
+        const multipartData = new FormData();
 
         Object.entries(payload).forEach(
           ([key, value]) => {
@@ -631,12 +685,12 @@ const Expenses = () => {
               value !== null &&
               value !== undefined
             ) {
-              formDataPayload.append(key, value);
+              multipartData.append(key, value);
             }
           }
         );
 
-        formDataPayload.append(
+        multipartData.append(
           "receipt",
           formData.receipt
         );
@@ -644,7 +698,7 @@ const Expenses = () => {
         if (editingExpense) {
           response = await api.patch(
             `/expenses/${editingExpense.id}/`,
-            formDataPayload,
+            multipartData,
             {
               headers: {
                 "Content-Type":
@@ -655,7 +709,7 @@ const Expenses = () => {
         } else {
           response = await api.post(
             "/expenses/",
-            formDataPayload,
+            multipartData,
             {
               headers: {
                 "Content-Type":
@@ -667,19 +721,19 @@ const Expenses = () => {
       }
 
       // =====================================================
-      // NO RECEIPT
+      // WITHOUT RECEIPT
       // =====================================================
 
       else {
         if (editingExpense) {
-          response =
-            await expensesApi.update(
-              editingExpense.id,
-              payload
-            );
+          response = await expensesApi.update(
+            editingExpense.id,
+            payload
+          );
         } else {
-          response =
-            await expensesApi.create(payload);
+          response = await expensesApi.create(
+            payload
+          );
         }
       }
 
@@ -687,7 +741,7 @@ const Expenses = () => {
         response?.data || response;
 
       // =====================================================
-      // UPDATE EXISTING
+      // UPDATE
       // =====================================================
 
       if (editingExpense) {
@@ -705,7 +759,7 @@ const Expenses = () => {
       }
 
       // =====================================================
-      // CREATE NEW
+      // CREATE
       // =====================================================
 
       else {
@@ -722,55 +776,17 @@ const Expenses = () => {
       setShowModal(false);
       setEditingExpense(null);
       resetForm();
+
+      // Reload from backend so created_by / updated_by
+      // and other server-generated fields are guaranteed
+      await loadExpenses();
     } catch (err) {
       console.error(
         "Failed to save expense:",
         err
       );
 
-      const apiError =
-        err?.response?.data;
-
-      if (
-        typeof apiError === "object" &&
-        apiError !== null
-      ) {
-        const messages =
-          Object.entries(apiError)
-            .map(
-              ([field, message]) => {
-                if (
-                  Array.isArray(message)
-                ) {
-                  return `${field}: ${message.join(
-                    ", "
-                  )}`;
-                }
-
-                if (
-                  typeof message ===
-                    "object" &&
-                  message !== null
-                ) {
-                  return `${field}: ${JSON.stringify(
-                    message
-                  )}`;
-                }
-
-                return `${field}: ${message}`;
-              }
-            )
-            .join(" | ");
-
-        setError(
-          messages ||
-            "Failed to save expense."
-        );
-      } else {
-        setError(
-          "Failed to save expense. Please try again."
-        );
-      }
+      setError(getApiErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -929,7 +945,6 @@ const Expenses = () => {
           role="alert"
         >
           <i className="bi bi-exclamation-triangle me-2"></i>
-
           {error}
 
           <button
@@ -946,7 +961,6 @@ const Expenses = () => {
           role="alert"
         >
           <i className="bi bi-check-circle me-2"></i>
-
           {success}
 
           <button
@@ -962,8 +976,6 @@ const Expenses = () => {
       ====================================================== */}
 
       <div className="row g-3 mb-4">
-        {/* TOTAL */}
-
         <div className="col-md-3">
           <div className="dashboard-card bg-white p-4 h-100">
             <div className="d-flex justify-content-between align-items-center">
@@ -973,8 +985,7 @@ const Expenses = () => {
                 </p>
 
                 <h4 className="mb-0">
-                  TSh{" "}
-                  {formatMoney(totalExpenses)}
+                  TSh {formatMoney(totalExpenses)}
                 </h4>
               </div>
 
@@ -985,8 +996,6 @@ const Expenses = () => {
           </div>
         </div>
 
-        {/* PAID */}
-
         <div className="col-md-3">
           <div className="dashboard-card bg-white p-4 h-100">
             <div className="d-flex justify-content-between align-items-center">
@@ -996,8 +1005,7 @@ const Expenses = () => {
                 </p>
 
                 <h4 className="mb-0 text-success">
-                  TSh{" "}
-                  {formatMoney(paidExpenses)}
+                  TSh {formatMoney(paidExpenses)}
                 </h4>
               </div>
 
@@ -1008,8 +1016,6 @@ const Expenses = () => {
           </div>
         </div>
 
-        {/* PENDING */}
-
         <div className="col-md-3">
           <div className="dashboard-card bg-white p-4 h-100">
             <div className="d-flex justify-content-between align-items-center">
@@ -1019,8 +1025,7 @@ const Expenses = () => {
                 </p>
 
                 <h4 className="mb-0 text-warning">
-                  TSh{" "}
-                  {formatMoney(pendingExpenses)}
+                  TSh {formatMoney(pendingExpenses)}
                 </h4>
               </div>
 
@@ -1031,8 +1036,6 @@ const Expenses = () => {
           </div>
         </div>
 
-        {/* APPROVED */}
-
         <div className="col-md-3">
           <div className="dashboard-card bg-white p-4 h-100">
             <div className="d-flex justify-content-between align-items-center">
@@ -1042,10 +1045,7 @@ const Expenses = () => {
                 </p>
 
                 <h4 className="mb-0 text-success">
-                  TSh{" "}
-                  {formatMoney(
-                    approvedExpenses
-                  )}
+                  TSh {formatMoney(approvedExpenses)}
                 </h4>
               </div>
 
@@ -1062,8 +1062,6 @@ const Expenses = () => {
       ====================================================== */}
 
       <div className="dashboard-card bg-white p-4">
-        {/* TOP BAR */}
-
         <div className="d-flex flex-column flex-lg-row justify-content-between gap-3 mb-4">
           <div>
             <h5 className="mb-1">
@@ -1071,8 +1069,7 @@ const Expenses = () => {
             </h5>
 
             <small className="text-muted">
-              {filteredExpenses.length}{" "}
-              expense
+              {filteredExpenses.length} expense
               {filteredExpenses.length !== 1
                 ? "s"
                 : ""}
@@ -1080,8 +1077,6 @@ const Expenses = () => {
           </div>
 
           <div className="d-flex flex-column flex-md-row gap-2">
-            {/* SEARCH */}
-
             <div
               className="input-group"
               style={{
@@ -1098,9 +1093,7 @@ const Expenses = () => {
                 placeholder="Search expenses..."
                 value={searchTerm}
                 onChange={(e) =>
-                  setSearchTerm(
-                    e.target.value
-                  )
+                  setSearchTerm(e.target.value)
                 }
               />
 
@@ -1117,8 +1110,6 @@ const Expenses = () => {
               )}
             </div>
 
-            {/* PAYMENT STATUS FILTER */}
-
             <select
               className="form-select"
               style={{
@@ -1126,31 +1117,27 @@ const Expenses = () => {
               }}
               value={statusFilter}
               onChange={(e) =>
-                setStatusFilter(
-                  e.target.value
-                )
+                setStatusFilter(e.target.value)
               }
             >
               <option value="all">
                 All Payment Statuses
               </option>
 
-              {PAYMENT_STATUSES.map(
-                (status) => (
-                  <option
-                    key={status.value}
-                    value={status.value}
-                  >
-                    {status.label}
-                  </option>
-                )
-              )}
+              {PAYMENT_STATUSES.map((status) => (
+                <option
+                  key={status.value}
+                  value={status.value}
+                >
+                  {status.label}
+                </option>
+              ))}
             </select>
           </div>
         </div>
 
         {/* ===================================================
-            LOADING / EMPTY / TABLE
+            LOADING
         ==================================================== */}
 
         {loading ? (
@@ -1169,6 +1156,10 @@ const Expenses = () => {
             </p>
           </div>
         ) : filteredExpenses.length === 0 ? (
+          /* =================================================
+             EMPTY
+          ================================================== */
+
           <div className="text-center py-5">
             <div className="mb-3">
               <i
@@ -1206,6 +1197,10 @@ const Expenses = () => {
               )}
           </div>
         ) : (
+          /* =================================================
+             TABLE
+          ================================================== */
+
           <div className="table-responsive">
             <table className="table table-hover align-middle mb-0">
               <thead>
@@ -1218,6 +1213,8 @@ const Expenses = () => {
                   <th>Amount</th>
                   <th>Payment</th>
                   <th>Approval</th>
+                  <th>Created By</th>
+                  <th>Updated By</th>
                   <th className="text-end">
                     Actions
                   </th>
@@ -1227,16 +1224,10 @@ const Expenses = () => {
               <tbody>
                 {filteredExpenses.map(
                   (expense, index) => (
-                    <tr
-                      key={expense.id}
-                    >
-                      {/* NUMBER */}
-
+                    <tr key={expense.id}>
                       <td>
                         {index + 1}
                       </td>
-
-                      {/* DATE */}
 
                       <td>
                         {formatDate(
@@ -1244,20 +1235,16 @@ const Expenses = () => {
                         )}
                       </td>
 
-                      {/* TITLE */}
-
                       <td>
                         <div>
                           <div className="fw-semibold">
-                            {expense.title ||
-                              "—"}
+                            {expense.title || "—"}
                           </div>
 
                           {expense.description && (
                             <small className="text-muted">
-                              {expense
-                                .description
-                                .length > 60
+                              {expense.description.length >
+                              60
                                 ? `${expense.description.substring(
                                     0,
                                     60
@@ -1267,8 +1254,6 @@ const Expenses = () => {
                           )}
                         </div>
                       </td>
-
-                      {/* TYPE */}
 
                       <td>
                         <div className="d-flex align-items-center">
@@ -1299,15 +1284,9 @@ const Expenses = () => {
                         </div>
                       </td>
 
-                      {/* BRANCH */}
-
                       <td>
-                        {getBranchName(
-                          expense
-                        )}
+                        {getBranchName(expense)}
                       </td>
-
-                      {/* AMOUNT */}
 
                       <td>
                         <span className="fw-semibold">
@@ -1331,20 +1310,64 @@ const Expenses = () => {
                         )}
                       </td>
 
-                      {/* PAYMENT */}
-
                       <td>
                         {renderPaymentStatusBadge(
                           expense.payment_status
                         )}
                       </td>
 
-                      {/* APPROVAL */}
-
                       <td>
                         {renderApprovalBadge(
                           expense
                         )}
+                      </td>
+
+                      {/* CREATED BY */}
+
+                      <td>
+                        <div className="d-flex align-items-center">
+                          <i className="bi bi-person-plus text-muted me-2"></i>
+
+                          <div>
+                            <span className="fw-semibold">
+                              {getCreatedByName(
+                                expense
+                              )}
+                            </span>
+
+                            {expense.created_at && (
+                              <small className="d-block text-muted">
+                                {formatDate(
+                                  expense.created_at
+                                )}
+                              </small>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* UPDATED BY */}
+
+                      <td>
+                        <div className="d-flex align-items-center">
+                          <i className="bi bi-person-check text-muted me-2"></i>
+
+                          <div>
+                            <span className="fw-semibold">
+                              {getUpdatedByName(
+                                expense
+                              )}
+                            </span>
+
+                            {expense.updated_at && (
+                              <small className="d-block text-muted">
+                                {formatDate(
+                                  expense.updated_at
+                                )}
+                              </small>
+                            )}
+                          </div>
+                        </div>
                       </td>
 
                       {/* ACTIONS */}
@@ -1360,9 +1383,7 @@ const Expenses = () => {
                                 expense
                               )
                             }
-                            disabled={
-                              deleting
-                            }
+                            disabled={deleting}
                           >
                             <i className="bi bi-pencil"></i>
                           </button>
@@ -1376,9 +1397,7 @@ const Expenses = () => {
                                 expense
                               )
                             }
-                            disabled={
-                              deleting
-                            }
+                            disabled={deleting}
                           >
                             <i className="bi bi-trash"></i>
                           </button>
@@ -1388,8 +1407,6 @@ const Expenses = () => {
                   )
                 )}
               </tbody>
-
-              {/* TOTAL */}
 
               <tfoot>
                 <tr>
@@ -1404,10 +1421,7 @@ const Expenses = () => {
                     TSh{" "}
                     {formatMoney(
                       filteredExpenses.reduce(
-                        (
-                          total,
-                          expense
-                        ) =>
+                        (total, expense) =>
                           total +
                           getExpenseTotal(
                             expense
@@ -1417,7 +1431,7 @@ const Expenses = () => {
                     )}
                   </td>
 
-                  <td colSpan="3"></td>
+                  <td colSpan="5"></td>
                 </tr>
               </tfoot>
             </table>
@@ -1444,8 +1458,6 @@ const Expenses = () => {
             role="document"
           >
             <div className="modal-content">
-              {/* HEADER */}
-
               <div className="modal-header">
                 <h5 className="modal-title">
                   <i
@@ -1464,14 +1476,10 @@ const Expenses = () => {
                 <button
                   type="button"
                   className="btn-close"
-                  onClick={
-                    handleCloseModal
-                  }
+                  onClick={handleCloseModal}
                   disabled={saving}
                 ></button>
               </div>
-
-              {/* FORM */}
 
               <form onSubmit={handleSubmit}>
                 <div className="modal-body">
@@ -1491,17 +1499,13 @@ const Expenses = () => {
                         name="title"
                         className="form-control"
                         placeholder="e.g. Office electricity bill"
-                        value={
-                          formData.title
-                        }
-                        onChange={
-                          handleChange
-                        }
+                        value={formData.title}
+                        onChange={handleChange}
                         required
                       />
                     </div>
 
-                    {/* EXPENSE TYPE */}
+                    {/* TYPE */}
 
                     <div className="col-md-4">
                       <label className="form-label">
@@ -1517,24 +1521,16 @@ const Expenses = () => {
                         value={
                           formData.expense_type
                         }
-                        onChange={
-                          handleChange
-                        }
+                        onChange={handleChange}
                         required
                       >
                         {EXPENSE_TYPES.map(
                           (type) => (
                             <option
-                              key={
-                                type.value
-                              }
-                              value={
-                                type.value
-                              }
+                              key={type.value}
+                              value={type.value}
                             >
-                              {
-                                type.label
-                              }
+                              {type.label}
                             </option>
                           )
                         )}
@@ -1554,15 +1550,9 @@ const Expenses = () => {
                       <select
                         name="branch"
                         className="form-select"
-                        value={
-                          formData.branch
-                        }
-                        onChange={
-                          handleChange
-                        }
-                        disabled={
-                          loadingOptions
-                        }
+                        value={formData.branch}
+                        onChange={handleChange}
+                        disabled={loadingOptions}
                         required
                       >
                         <option value="">
@@ -1574,16 +1564,10 @@ const Expenses = () => {
                         {branches.map(
                           (branch) => (
                             <option
-                              key={
-                                branch.id
-                              }
-                              value={
-                                branch.id
-                              }
+                              key={branch.id}
+                              value={branch.id}
                             >
-                              {
-                                branch.name
-                              }
+                              {branch.name}
                             </option>
                           )
                         )}
@@ -1607,9 +1591,7 @@ const Expenses = () => {
                         value={
                           formData.expense_date
                         }
-                        onChange={
-                          handleChange
-                        }
+                        onChange={handleChange}
                         required
                       />
                     </div>
@@ -1625,12 +1607,8 @@ const Expenses = () => {
                         type="date"
                         name="due_date"
                         className="form-control"
-                        value={
-                          formData.due_date
-                        }
-                        onChange={
-                          handleChange
-                        }
+                        value={formData.due_date}
+                        onChange={handleChange}
                       />
                     </div>
 
@@ -1659,9 +1637,7 @@ const Expenses = () => {
                           value={
                             formData.amount
                           }
-                          onChange={
-                            handleChange
-                          }
+                          onChange={handleChange}
                           required
                         />
                       </div>
@@ -1686,12 +1662,8 @@ const Expenses = () => {
                           placeholder="0.00"
                           min="0"
                           step="0.01"
-                          value={
-                            formData.tax
-                          }
-                          onChange={
-                            handleChange
-                          }
+                          value={formData.tax}
+                          onChange={handleChange}
                         />
                       </div>
                     </div>
@@ -1709,23 +1681,15 @@ const Expenses = () => {
                         value={
                           formData.payment_status
                         }
-                        onChange={
-                          handleChange
-                        }
+                        onChange={handleChange}
                       >
                         {PAYMENT_STATUSES.map(
                           (status) => (
                             <option
-                              key={
-                                status.value
-                              }
-                              value={
-                                status.value
-                              }
+                              key={status.value}
+                              value={status.value}
                             >
-                              {
-                                status.label
-                              }
+                              {status.label}
                             </option>
                           )
                         )}
@@ -1747,9 +1711,7 @@ const Expenses = () => {
                         value={
                           formData.payment_method
                         }
-                        onChange={
-                          handleChange
-                        }
+                        onChange={handleChange}
                       />
                     </div>
 
@@ -1767,13 +1729,11 @@ const Expenses = () => {
                         value={
                           formData.payment_date
                         }
-                        onChange={
-                          handleChange
-                        }
+                        onChange={handleChange}
                       />
                     </div>
 
-                    {/* INVOICE NUMBER */}
+                    {/* INVOICE */}
 
                     <div className="col-md-6">
                       <label className="form-label">
@@ -1788,9 +1748,7 @@ const Expenses = () => {
                         value={
                           formData.invoice_number
                         }
-                        onChange={
-                          handleChange
-                        }
+                        onChange={handleChange}
                       />
                     </div>
 
@@ -1809,9 +1767,7 @@ const Expenses = () => {
                         value={
                           formData.reference
                         }
-                        onChange={
-                          handleChange
-                        }
+                        onChange={handleChange}
                       />
                     </div>
 
@@ -1827,9 +1783,7 @@ const Expenses = () => {
                         name="receipt"
                         className="form-control"
                         accept=".pdf,.jpg,.jpeg,.png"
-                        onChange={
-                          handleChange
-                        }
+                        onChange={handleChange}
                       />
 
                       <small className="text-muted">
@@ -1852,22 +1806,16 @@ const Expenses = () => {
                         value={
                           formData.description
                         }
-                        onChange={
-                          handleChange
-                        }
+                        onChange={handleChange}
                       ></textarea>
                     </div>
                   </div>
 
-                  {/* =================================================
-                      TOTAL PREVIEW
-                  ================================================== */}
+                  {/* TOTAL PREVIEW */}
 
                   <div className="alert alert-light border mt-4 mb-0">
                     <div className="d-flex justify-content-between">
-                      <span>
-                        Amount
-                      </span>
+                      <span>Amount</span>
 
                       <strong>
                         TSh{" "}
@@ -1878,9 +1826,7 @@ const Expenses = () => {
                     </div>
 
                     <div className="d-flex justify-content-between">
-                      <span>
-                        Tax
-                      </span>
+                      <span>Tax</span>
 
                       <strong>
                         TSh{" "}
@@ -1893,20 +1839,16 @@ const Expenses = () => {
                     <hr />
 
                     <div className="d-flex justify-content-between">
-                      <strong>
-                        Total
-                      </strong>
+                      <strong>Total</strong>
 
                       <strong className="text-primary">
                         TSh{" "}
                         {formatMoney(
                           Number(
-                            formData.amount ||
-                              0
+                            formData.amount || 0
                           ) +
                             Number(
-                              formData.tax ||
-                                0
+                              formData.tax || 0
                             )
                         )}
                       </strong>
@@ -1920,9 +1862,7 @@ const Expenses = () => {
                   <button
                     type="button"
                     className="btn btn-secondary"
-                    onClick={
-                      handleCloseModal
-                    }
+                    onClick={handleCloseModal}
                     disabled={saving}
                   >
                     Cancel
@@ -1966,4 +1906,3 @@ const Expenses = () => {
 };
 
 export default Expenses;
-
