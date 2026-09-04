@@ -33,8 +33,20 @@ import Suppliers from "../pages/Suppliers";
 import StockAdjustments from "../pages/StockAdjustments";
 import Return from "../pages/Return";
 
-//Expensis will be here
+// ===============================
+// EXPENSES
+// ===============================
 import Expenses from "../pages/Expenses";
+
+// ===============================
+// PAYMENT METHODS
+// ===============================
+import PaymentMethod from "../pages/PaymentMethod";
+
+// ===============================
+// ROLES & PERMISSIONS
+// ===============================
+import Roles from "../pages/Roles";
 
 // ===============================
 // SERVICES
@@ -194,7 +206,7 @@ const AppRoutes = () => {
         }
       />
 
-    <Route
+      <Route
         path="/returns"
         element={
           <ProtectedRoute>
@@ -202,6 +214,7 @@ const AppRoutes = () => {
           </ProtectedRoute>
         }
       />
+
       <Route
         path="/suppliers"
         element={
@@ -232,9 +245,11 @@ const AppRoutes = () => {
           </ProtectedRoute>
         }
       />
-       {/* =====================================================
+
+      {/* =====================================================
           EXPENSES
       ===================================================== */}
+
       <Route
         path="/expenses"
         element={
@@ -243,14 +258,20 @@ const AppRoutes = () => {
           </ProtectedRoute>
         }
       />
+
+      {/* =====================================================
+          PAYMENT METHODS
+      ===================================================== */}
+
       <Route
-        path="/expenses"
+        path="/settings/payment-methods"
         element={
           <ProtectedRoute>
-            <Expenses />
+            <PaymentMethod />
           </ProtectedRoute>
         }
       />
+
       {/* =====================================================
           REPORTS
       ===================================================== */}
@@ -276,6 +297,23 @@ const AppRoutes = () => {
           </ProtectedRoute>
         }
       />
+
+      {/* =====================================================
+          ROLES & PERMISSIONS
+      ===================================================== */}
+
+      <Route
+        path="/roles"
+        element={
+          <ProtectedRoute>
+            <Roles />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* =====================================================
+          SETTINGS
+      ===================================================== */}
 
       <Route
         path="/settings"

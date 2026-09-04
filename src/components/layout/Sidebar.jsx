@@ -67,7 +67,7 @@ const Sidebar = () => {
           icon: 'bi-tags',
           path: '/categories',
         },
-         {
+        {
           name: 'Brands',
           icon: 'bi-award',
           path: '/brands',
@@ -158,6 +158,11 @@ const Sidebar = () => {
           name: 'Roles & Permissions',
           icon: 'bi-shield-lock',
           path: '/roles',
+        },
+        {
+          name: 'Payment Methods',
+          icon: 'bi-credit-card-2-front',
+          path: '/settings/payment-methods',
         },
         {
           name: 'Settings',
