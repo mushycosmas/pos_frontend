@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import api from "../services/api";
 import expensesApi from "../services/expensesApi";
+import branchesApi from "../services/branchesApi";
 
 const Expenses = () => {
   // =========================================================
@@ -40,7 +41,6 @@ const Expenses = () => {
 
   const [expenses, setExpenses] = useState([]);
   const [branches, setBranches] = useState([]);
-  const [companies, setCompanies] = useState([]);
 
   const [loading, setLoading] = useState(true);
   const [loadingOptions, setLoadingOptions] = useState(false);
@@ -69,7 +69,6 @@ const Expenses = () => {
     due_date: "",
 
     branch: "",
-    company: "",
 
     payment_status: "pending",
     payment_method: "",
@@ -129,32 +128,6 @@ const Expenses = () => {
     );
 
     return branch?.name || "—";
-  }
-
-  function getCompanyName(expense) {
-    if (expense?.company_name) {
-      return expense.company_name;
-    }
-
-    if (
-      expense?.company &&
-      typeof expense.company === "object" &&
-      expense.company.name
-    ) {
-      return expense.company.name;
-    }
-
-    const company = companies.find(
-      (item) =>
-        String(item.id) ===
-        String(
-          typeof expense?.company === "object"
-            ? expense.company?.id
-            : expense?.company
-        )
-    );
-
-    return company?.name || "—";
   }
 
   function getPaymentStatusName(status) {
@@ -221,7 +194,6 @@ const Expenses = () => {
       due_date: "",
 
       branch: "",
-      company: "",
 
       payment_status: "pending",
       payment_method: "",
@@ -259,30 +231,22 @@ const Expenses = () => {
   };
 
   // =========================================================
-  // LOAD FORM OPTIONS
+  // LOAD BRANCHES
   // =========================================================
 
-  const loadFormOptions = async () => {
+  const loadBranches = async () => {
     try {
       setLoadingOptions(true);
 
-      const [branchResponse, companyResponse] =
-        await Promise.all([
-          api.get("/branches/"),
-          api.get("/companies/"),
-        ]);
+      const data = await branchesApi.getAll();
 
-      setBranches(extractList(branchResponse.data));
-      setCompanies(extractList(companyResponse.data));
+      setBranches(extractList(data));
     } catch (err) {
-      console.error(
-        "Failed to load expense form options:",
-        err
-      );
+      console.error("Failed to load branches:", err);
 
       setError(
         err?.response?.data?.detail ||
-          "Failed to load branches or companies."
+          "Failed to load branches. Please try again."
       );
     } finally {
       setLoadingOptions(false);
@@ -295,7 +259,7 @@ const Expenses = () => {
 
   useEffect(() => {
     loadExpenses();
-    loadFormOptions();
+    loadBranches();
   }, []);
 
   // =========================================================
@@ -321,14 +285,11 @@ const Expenses = () => {
         expense?.branch?.name ||
         getBranchName(expense);
 
-      const companyName =
-        expense?.company_name ||
-        expense?.company?.name ||
-        getCompanyName(expense);
-
       const matchesSearch =
         !search ||
-        String(title).toLowerCase().includes(search) ||
+        String(title)
+          .toLowerCase()
+          .includes(search) ||
         String(expenseType)
           .toLowerCase()
           .includes(search) ||
@@ -342,9 +303,6 @@ const Expenses = () => {
           .toLowerCase()
           .includes(search) ||
         String(branchName)
-          .toLowerCase()
-          .includes(search) ||
-        String(companyName)
           .toLowerCase()
           .includes(search);
 
@@ -363,7 +321,6 @@ const Expenses = () => {
     searchTerm,
     statusFilter,
     branches,
-    companies,
   ]);
 
   // =========================================================
@@ -491,16 +448,6 @@ const Expenses = () => {
             )
           : "",
 
-      company:
-        expense?.company !== null &&
-        expense?.company !== undefined
-          ? String(
-              typeof expense.company === "object"
-                ? expense.company?.id
-                : expense.company
-            )
-          : "",
-
       payment_status:
         expense?.payment_status || "pending",
 
@@ -616,7 +563,7 @@ const Expenses = () => {
   // =========================================================
 
   const preparePayload = () => {
-    const payload = {
+    return {
       title: formData.title.trim(),
 
       description: formData.description.trim(),
@@ -645,13 +592,7 @@ const Expenses = () => {
 
       reference:
         formData.reference.trim() || null,
-
-      company: formData.company
-        ? Number(formData.company)
-        : null,
     };
-
-    return payload;
   };
 
   // =========================================================
@@ -677,9 +618,9 @@ const Expenses = () => {
 
       let response;
 
-      // -----------------------------------------------------
+      // =====================================================
       // RECEIPT ATTACHED
-      // -----------------------------------------------------
+      // =====================================================
 
       if (formData.receipt) {
         const formDataPayload = new FormData();
@@ -725,9 +666,9 @@ const Expenses = () => {
         }
       }
 
-      // -----------------------------------------------------
+      // =====================================================
       // NO RECEIPT
-      // -----------------------------------------------------
+      // =====================================================
 
       else {
         if (editingExpense) {
@@ -745,9 +686,9 @@ const Expenses = () => {
       const savedExpense =
         response?.data || response;
 
-      // -----------------------------------------------------
-      // UPDATE EXISTING EXPENSE
-      // -----------------------------------------------------
+      // =====================================================
+      // UPDATE EXISTING
+      // =====================================================
 
       if (editingExpense) {
         setExpenses((prev) =>
@@ -763,9 +704,9 @@ const Expenses = () => {
         );
       }
 
-      // -----------------------------------------------------
-      // CREATE NEW EXPENSE
-      // -----------------------------------------------------
+      // =====================================================
+      // CREATE NEW
+      // =====================================================
 
       else {
         setExpenses((prev) => [
@@ -1209,7 +1150,7 @@ const Expenses = () => {
         </div>
 
         {/* ===================================================
-            LOADING
+            LOADING / EMPTY / TABLE
         ==================================================== */}
 
         {loading ? (
@@ -1228,10 +1169,6 @@ const Expenses = () => {
             </p>
           </div>
         ) : filteredExpenses.length === 0 ? (
-          /* =================================================
-             EMPTY STATE
-          ================================================== */
-
           <div className="text-center py-5">
             <div className="mb-3">
               <i
@@ -1269,10 +1206,6 @@ const Expenses = () => {
               )}
           </div>
         ) : (
-          /* =================================================
-             TABLE
-          ================================================== */
-
           <div className="table-responsive">
             <table className="table table-hover align-middle mb-0">
               <thead>
@@ -1335,7 +1268,7 @@ const Expenses = () => {
                         </div>
                       </td>
 
-                      {/* EXPENSE TYPE */}
+                      {/* TYPE */}
 
                       <td>
                         <div className="d-flex align-items-center">
@@ -1657,53 +1590,6 @@ const Expenses = () => {
                       </select>
                     </div>
 
-                    {/* COMPANY */}
-
-                    <div className="col-md-6">
-                      <label className="form-label">
-                        Company
-                      </label>
-
-                      <select
-                        name="company"
-                        className="form-select"
-                        value={
-                          formData.company
-                        }
-                        onChange={
-                          handleChange
-                        }
-                        disabled={
-                          loadingOptions
-                        }
-                      >
-                        <option value="">
-                          Select company
-                        </option>
-
-                        {companies.map(
-                          (company) => (
-                            <option
-                              key={
-                                company.id
-                              }
-                              value={
-                                company.id
-                              }
-                            >
-                              {
-                                company.name
-                              }
-                            </option>
-                          )
-                        )}
-                      </select>
-
-                      <small className="text-muted">
-                        Optional.
-                      </small>
-                    </div>
-
                     {/* EXPENSE DATE */}
 
                     <div className="col-md-3">
@@ -1973,7 +1859,9 @@ const Expenses = () => {
                     </div>
                   </div>
 
-                  {/* TOTAL PREVIEW */}
+                  {/* =================================================
+                      TOTAL PREVIEW
+                  ================================================== */}
 
                   <div className="alert alert-light border mt-4 mb-0">
                     <div className="d-flex justify-content-between">
@@ -2078,3 +1966,4 @@ const Expenses = () => {
 };
 
 export default Expenses;
+
