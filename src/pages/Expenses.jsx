@@ -48,6 +48,10 @@ const Expenses = () => {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  // Approval states
+  const [approvingExpenseId, setApprovingExpenseId] = useState(null);
+  const [rejectingExpenseId, setRejectingExpenseId] = useState(null);
+
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -175,6 +179,22 @@ const Expenses = () => {
     return getUserName(expense?.updated_by);
   };
 
+  const getApprovedByName = (expense) => {
+    if (expense?.approved_by_name) {
+      return expense.approved_by_name;
+    }
+
+    return getUserName(expense?.approved_by);
+  };
+
+  const getRejectedByName = (expense) => {
+    if (expense?.rejected_by_name) {
+      return expense.rejected_by_name;
+    }
+
+    return getUserName(expense?.rejected_by);
+  };
+
   const formatMoney = (value) => {
     return new Intl.NumberFormat("en-TZ", {
       minimumFractionDigits: 2,
@@ -212,6 +232,46 @@ const Expenses = () => {
       Number(expense?.amount || 0) +
       Number(expense?.tax || 0)
     );
+  };
+
+  const getApiErrorMessage = (err, fallback) => {
+    const apiError = err?.response?.data;
+
+    if (!apiError) {
+      return fallback;
+    }
+
+    if (typeof apiError === "string") {
+      return apiError;
+    }
+
+    if (
+      typeof apiError === "object" &&
+      apiError !== null
+    ) {
+      if (apiError.detail) {
+        return apiError.detail;
+      }
+
+      return Object.entries(apiError)
+        .map(([field, message]) => {
+          if (Array.isArray(message)) {
+            return `${field}: ${message.join(", ")}`;
+          }
+
+          if (
+            typeof message === "object" &&
+            message !== null
+          ) {
+            return `${field}: ${JSON.stringify(message)}`;
+          }
+
+          return `${field}: ${message}`;
+        })
+        .join(" | ");
+    }
+
+    return fallback;
   };
 
   // =========================================================
@@ -321,6 +381,9 @@ const Expenses = () => {
       const createdBy = getCreatedByName(expense);
       const updatedBy = getUpdatedByName(expense);
 
+      const approvedBy = getApprovedByName(expense);
+      const rejectedBy = getRejectedByName(expense);
+
       const matchesSearch =
         !search ||
         String(title).toLowerCase().includes(search) ||
@@ -330,7 +393,9 @@ const Expenses = () => {
         String(reference).toLowerCase().includes(search) ||
         String(branchName).toLowerCase().includes(search) ||
         String(createdBy).toLowerCase().includes(search) ||
-        String(updatedBy).toLowerCase().includes(search);
+        String(updatedBy).toLowerCase().includes(search) ||
+        String(approvedBy).toLowerCase().includes(search) ||
+        String(rejectedBy).toLowerCase().includes(search);
 
       const paymentStatus = String(
         expense?.payment_status || ""
@@ -606,50 +671,6 @@ const Expenses = () => {
   };
 
   // =========================================================
-  // GET API ERROR
-  // =========================================================
-
-  const getApiErrorMessage = (err) => {
-    const apiError = err?.response?.data;
-
-    if (!apiError) {
-      return "Failed to save expense. Please try again.";
-    }
-
-    if (typeof apiError === "string") {
-      return apiError;
-    }
-
-    if (
-      typeof apiError === "object" &&
-      apiError !== null
-    ) {
-      if (apiError.detail) {
-        return apiError.detail;
-      }
-
-      return Object.entries(apiError)
-        .map(([field, message]) => {
-          if (Array.isArray(message)) {
-            return `${field}: ${message.join(", ")}`;
-          }
-
-          if (
-            typeof message === "object" &&
-            message !== null
-          ) {
-            return `${field}: ${JSON.stringify(message)}`;
-          }
-
-          return `${field}: ${message}`;
-        })
-        .join(" | ");
-    }
-
-    return "Failed to save expense. Please try again.";
-  };
-
-  // =========================================================
   // SAVE EXPENSE
   // =========================================================
 
@@ -740,10 +761,6 @@ const Expenses = () => {
       const savedExpense =
         response?.data || response;
 
-      // =====================================================
-      // UPDATE
-      // =====================================================
-
       if (editingExpense) {
         setExpenses((prev) =>
           prev.map((expense) =>
@@ -756,13 +773,7 @@ const Expenses = () => {
         setSuccess(
           "Expense updated successfully."
         );
-      }
-
-      // =====================================================
-      // CREATE
-      // =====================================================
-
-      else {
+      } else {
         setExpenses((prev) => [
           savedExpense,
           ...prev,
@@ -777,8 +788,6 @@ const Expenses = () => {
       setEditingExpense(null);
       resetForm();
 
-      // Reload from backend so created_by / updated_by
-      // and other server-generated fields are guaranteed
       await loadExpenses();
     } catch (err) {
       console.error(
@@ -786,9 +795,145 @@ const Expenses = () => {
         err
       );
 
-      setError(getApiErrorMessage(err));
+      setError(
+        getApiErrorMessage(
+          err,
+          "Failed to save expense. Please try again."
+        )
+      );
     } finally {
       setSaving(false);
+    }
+  };
+
+  // =========================================================
+  // APPROVE EXPENSE
+  // =========================================================
+
+  const handleApprove = async (expense) => {
+    if (!expense?.id) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Are you sure you want to approve "${expense.title}"?`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setApprovingExpenseId(expense.id);
+      setError("");
+      setSuccess("");
+
+      const response = await api.post(
+        `/expenses/${expense.id}/approve/`
+      );
+
+      const approvedExpense =
+        response?.data || response;
+
+      setExpenses((prev) =>
+        prev.map((item) =>
+          item.id === expense.id
+            ? approvedExpense
+            : item
+        )
+      );
+
+      setSuccess(
+        `"${expense.title}" has been approved successfully.`
+      );
+
+      // Make sure all server-generated fields are current
+      await loadExpenses();
+    } catch (err) {
+      console.error(
+        "Failed to approve expense:",
+        err
+      );
+
+      setError(
+        getApiErrorMessage(
+          err,
+          "Failed to approve expense. Please try again."
+        )
+      );
+    } finally {
+      setApprovingExpenseId(null);
+    }
+  };
+
+  // =========================================================
+  // REJECT EXPENSE
+  // =========================================================
+
+  const handleReject = async (expense) => {
+    if (!expense?.id) {
+      return;
+    }
+
+    const reason = window.prompt(
+      `Enter the reason for rejecting "${expense.title}":`
+    );
+
+    if (reason === null) {
+      return;
+    }
+
+    const trimmedReason = reason.trim();
+
+    if (!trimmedReason) {
+      setError(
+        "Rejection reason is required."
+      );
+      return;
+    }
+
+    try {
+      setRejectingExpenseId(expense.id);
+      setError("");
+      setSuccess("");
+
+      const response = await api.post(
+        `/expenses/${expense.id}/reject/`,
+        {
+          rejection_reason: trimmedReason,
+        }
+      );
+
+      const rejectedExpense =
+        response?.data || response;
+
+      setExpenses((prev) =>
+        prev.map((item) =>
+          item.id === expense.id
+            ? rejectedExpense
+            : item
+        )
+      );
+
+      setSuccess(
+        `"${expense.title}" has been rejected successfully.`
+      );
+
+      await loadExpenses();
+    } catch (err) {
+      console.error(
+        "Failed to reject expense:",
+        err
+      );
+
+      setError(
+        getApiErrorMessage(
+          err,
+          "Failed to reject expense. Please try again."
+        )
+      );
+    } finally {
+      setRejectingExpenseId(null);
     }
   };
 
@@ -828,8 +973,10 @@ const Expenses = () => {
       );
 
       setError(
-        err?.response?.data?.detail ||
+        getApiErrorMessage(
+          err,
           "Failed to delete expense. Please try again."
+        )
       );
     } finally {
       setDeleting(false);
@@ -883,24 +1030,152 @@ const Expenses = () => {
   const renderApprovalBadge = (expense) => {
     if (expense?.is_rejected) {
       return (
-        <span className="badge bg-danger">
-          Rejected
-        </span>
+        <div>
+          <span className="badge bg-danger">
+            <i className="bi bi-x-circle me-1"></i>
+            Rejected
+          </span>
+
+          {expense?.rejection_reason && (
+            <small className="d-block text-muted mt-1">
+              {expense.rejection_reason}
+            </small>
+          )}
+
+          {expense?.rejected_by_name && (
+            <small className="d-block text-muted">
+              By: {expense.rejected_by_name}
+            </small>
+          )}
+        </div>
       );
     }
 
     if (expense?.is_approved) {
       return (
-        <span className="badge bg-success">
-          Approved
-        </span>
+        <div>
+          <span className="badge bg-success">
+            <i className="bi bi-check-circle me-1"></i>
+            Approved
+          </span>
+
+          {expense?.approved_by_name && (
+            <small className="d-block text-muted mt-1">
+              By: {expense.approved_by_name}
+            </small>
+          )}
+        </div>
       );
     }
 
     return (
       <span className="badge bg-warning text-dark">
+        <i className="bi bi-clock me-1"></i>
         Pending Approval
       </span>
+    );
+  };
+
+  // =========================================================
+  // APPROVAL ACTIONS
+  // =========================================================
+
+  const renderApprovalActions = (expense) => {
+    const isApproving =
+      approvingExpenseId === expense.id;
+
+    const isRejecting =
+      rejectingExpenseId === expense.id;
+
+    const isProcessing =
+      isApproving || isRejecting;
+
+    // Already approved
+    if (expense?.is_approved) {
+      return (
+        <span className="text-success small">
+          <i className="bi bi-check-circle me-1"></i>
+          Approved
+        </span>
+      );
+    }
+
+    // Already rejected
+    if (expense?.is_rejected) {
+      return (
+        <span className="text-danger small">
+          <i className="bi bi-x-circle me-1"></i>
+          Rejected
+        </span>
+      );
+    }
+
+    return (
+      <div className="btn-group">
+        {/* APPROVE */}
+
+        <button
+          type="button"
+          className="btn btn-sm btn-outline-success"
+          title="Approve expense"
+          onClick={() =>
+            handleApprove(expense)
+          }
+          disabled={
+            isProcessing ||
+            approvingExpenseId !== null ||
+            rejectingExpenseId !== null ||
+            deleting
+          }
+        >
+          {isApproving ? (
+            <>
+              <span
+                className="spinner-border spinner-border-sm me-1"
+                role="status"
+              ></span>
+              Approving...
+            </>
+          ) : (
+            <>
+              <i className="bi bi-check-lg me-1"></i>
+              Approve
+            </>
+          )}
+        </button>
+
+        {/* REJECT */}
+
+        <button
+          type="button"
+          className="btn btn-sm btn-outline-danger"
+          title="Reject expense"
+          onClick={() =>
+            handleReject(expense)
+          }
+          disabled={
+            isProcessing ||
+            approvingExpenseId !== null ||
+            rejectingExpenseId !== null ||
+            deleting
+          }
+        >
+          {isRejecting ? (
+            <>
+              <span
+                className="spinner-border spinner-border-sm me-1"
+                role="status"
+              ></span>
+              Rejecting...
+            </>
+          ) : (
+            <>
+              <i className="bi bi-x-lg me-1"></i>
+              Reject
+            </>
+          )}
+        </button>
+      </div>
     );
   };
 
@@ -929,6 +1204,10 @@ const Expenses = () => {
           type="button"
           className="primary-button"
           onClick={handleAddExpense}
+          disabled={
+            approvingExpenseId !== null ||
+            rejectingExpenseId !== null
+          }
         >
           <i className="bi bi-plus-circle me-2"></i>
           Add Expense
@@ -945,6 +1224,7 @@ const Expenses = () => {
           role="alert"
         >
           <i className="bi bi-exclamation-triangle me-2"></i>
+
           {error}
 
           <button
@@ -961,6 +1241,7 @@ const Expenses = () => {
           role="alert"
         >
           <i className="bi bi-check-circle me-2"></i>
+
           {success}
 
           <button
@@ -976,6 +1257,8 @@ const Expenses = () => {
       ====================================================== */}
 
       <div className="row g-3 mb-4">
+        {/* TOTAL */}
+
         <div className="col-md-3">
           <div className="dashboard-card bg-white p-4 h-100">
             <div className="d-flex justify-content-between align-items-center">
@@ -995,6 +1278,8 @@ const Expenses = () => {
             </div>
           </div>
         </div>
+
+        {/* PAID */}
 
         <div className="col-md-3">
           <div className="dashboard-card bg-white p-4 h-100">
@@ -1016,6 +1301,8 @@ const Expenses = () => {
           </div>
         </div>
 
+        {/* PENDING PAYMENT */}
+
         <div className="col-md-3">
           <div className="dashboard-card bg-white p-4 h-100">
             <div className="d-flex justify-content-between align-items-center">
@@ -1035,6 +1322,8 @@ const Expenses = () => {
             </div>
           </div>
         </div>
+
+        {/* APPROVED */}
 
         <div className="col-md-3">
           <div className="dashboard-card bg-white p-4 h-100">
@@ -1077,6 +1366,8 @@ const Expenses = () => {
           </div>
 
           <div className="d-flex flex-column flex-md-row gap-2">
+            {/* SEARCH */}
+
             <div
               className="input-group"
               style={{
@@ -1109,6 +1400,8 @@ const Expenses = () => {
                 </button>
               )}
             </div>
+
+            {/* PAYMENT FILTER */}
 
             <select
               className="form-select"
@@ -1225,15 +1518,21 @@ const Expenses = () => {
                 {filteredExpenses.map(
                   (expense, index) => (
                     <tr key={expense.id}>
+                      {/* NUMBER */}
+
                       <td>
                         {index + 1}
                       </td>
+
+                      {/* DATE */}
 
                       <td>
                         {formatDate(
                           expense.expense_date
                         )}
                       </td>
+
+                      {/* TITLE */}
 
                       <td>
                         <div>
@@ -1254,6 +1553,8 @@ const Expenses = () => {
                           )}
                         </div>
                       </td>
+
+                      {/* TYPE */}
 
                       <td>
                         <div className="d-flex align-items-center">
@@ -1284,9 +1585,13 @@ const Expenses = () => {
                         </div>
                       </td>
 
+                      {/* BRANCH */}
+
                       <td>
                         {getBranchName(expense)}
                       </td>
+
+                      {/* AMOUNT */}
 
                       <td>
                         <span className="fw-semibold">
@@ -1310,11 +1615,15 @@ const Expenses = () => {
                         )}
                       </td>
 
+                      {/* PAYMENT */}
+
                       <td>
                         {renderPaymentStatusBadge(
                           expense.payment_status
                         )}
                       </td>
+
+                      {/* APPROVAL */}
 
                       <td>
                         {renderApprovalBadge(
@@ -1373,7 +1682,15 @@ const Expenses = () => {
                       {/* ACTIONS */}
 
                       <td className="text-end">
-                        <div className="btn-group">
+                        <div className="d-flex justify-content-end align-items-center gap-1 flex-wrap">
+                          {/* APPROVAL ACTIONS */}
+
+                          {renderApprovalActions(
+                            expense
+                          )}
+
+                          {/* EDIT */}
+
                           <button
                             type="button"
                             className="btn btn-sm btn-outline-primary"
@@ -1383,10 +1700,18 @@ const Expenses = () => {
                                 expense
                               )
                             }
-                            disabled={deleting}
+                            disabled={
+                              deleting ||
+                              approvingExpenseId !==
+                                null ||
+                              rejectingExpenseId !==
+                                null
+                            }
                           >
                             <i className="bi bi-pencil"></i>
                           </button>
+
+                          {/* DELETE */}
 
                           <button
                             type="button"
@@ -1397,9 +1722,22 @@ const Expenses = () => {
                                 expense
                               )
                             }
-                            disabled={deleting}
+                            disabled={
+                              deleting ||
+                              approvingExpenseId !==
+                                null ||
+                              rejectingExpenseId !==
+                                null
+                            }
                           >
-                            <i className="bi bi-trash"></i>
+                            {deleting ? (
+                              <span
+                                className="spinner-border spinner-border-sm"
+                                role="status"
+                              ></span>
+                            ) : (
+                              <i className="bi bi-trash"></i>
+                            )}
                           </button>
                         </div>
                       </td>
@@ -1407,6 +1745,10 @@ const Expenses = () => {
                   )
                 )}
               </tbody>
+
+              {/* =================================================
+                  TABLE FOOTER
+              ================================================== */}
 
               <tfoot>
                 <tr>
@@ -1458,6 +1800,8 @@ const Expenses = () => {
             role="document"
           >
             <div className="modal-content">
+              {/* HEADER */}
+
               <div className="modal-header">
                 <h5 className="modal-title">
                   <i
@@ -1480,6 +1824,8 @@ const Expenses = () => {
                   disabled={saving}
                 ></button>
               </div>
+
+              {/* FORM */}
 
               <form onSubmit={handleSubmit}>
                 <div className="modal-body">
