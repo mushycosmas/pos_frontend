@@ -186,13 +186,13 @@ const Sidebar = () => {
           name: 'Users',
           icon: 'bi-people-fill',
           path: '/users',
-          // permission: 'users.view_user',
+          permission: 'users.view_user',
         },
         {
           name: 'Roles & Permissions',
           icon: 'bi-shield-lock',
           path: '/roles',
-          // permission: 'roles.view_role',
+          permission: 'roles.view_role',
         },
         {
           name: 'Payment Methods',

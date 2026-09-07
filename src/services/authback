@@ -14,7 +14,6 @@ const USER_KEY = "user";
 // ============================================================
 
 const getActiveStorage = () => {
-
   if (
     localStorage.getItem(ACCESS_TOKEN_KEY) ||
     localStorage.getItem(REFRESH_TOKEN_KEY)
@@ -33,17 +32,56 @@ const getActiveStorage = () => {
 };
 
 // ============================================================
+// NORMALIZE USER
+// ============================================================
+// Ensures permissions always exists as an array.
+// Also normalizes permission values to strings.
+// ============================================================
+
+const normalizeUser = (user) => {
+  if (!user || typeof user !== "object") {
+    return null;
+  }
+
+  let permissions = [];
+
+  if (Array.isArray(user.permissions)) {
+    permissions = user.permissions
+      .map((permission) => {
+        // If backend returns:
+        // { id: 1, code: "sales.create_sale" }
+        if (permission && typeof permission === "object") {
+          return (
+            permission.code ||
+            permission.permission ||
+            permission.codename ||
+            permission.name ||
+            null
+          );
+        }
+
+        return permission;
+      })
+      .filter(Boolean)
+      .map(String);
+  }
+
+  return {
+    ...user,
+    permissions,
+  };
+};
+
+// ============================================================
 // AUTH SERVICE
 // ============================================================
 
 const authApi = {
-
   // ==========================================================
   // LOGIN
   // ==========================================================
 
   login: async (credentials, rememberMe = false) => {
-
     const response = await api.post(
       "/auth/login/",
       credentials
@@ -51,8 +89,16 @@ const authApi = {
 
     const data = response.data;
 
+    // --------------------------------------------------------
+    // Get access token
+    // --------------------------------------------------------
+
     const accessToken =
       data.access || data.access_token;
+
+    // --------------------------------------------------------
+    // Get refresh token
+    // --------------------------------------------------------
 
     const refreshToken =
       data.refresh || data.refresh_token;
@@ -64,7 +110,7 @@ const authApi = {
     }
 
     // --------------------------------------------------------
-    // Clear previous authentication
+    // Clear old authentication
     // --------------------------------------------------------
 
     authApi.clearStorage();
@@ -78,7 +124,7 @@ const authApi = {
       : sessionStorage;
 
     // --------------------------------------------------------
-    // Save access token
+    // Store access token
     // --------------------------------------------------------
 
     storage.setItem(
@@ -87,11 +133,10 @@ const authApi = {
     );
 
     // --------------------------------------------------------
-    // Save refresh token
+    // Store refresh token
     // --------------------------------------------------------
 
     if (refreshToken) {
-
       storage.setItem(
         REFRESH_TOKEN_KEY,
         refreshToken
@@ -99,39 +144,71 @@ const authApi = {
     }
 
     // --------------------------------------------------------
-    // Save user
+    // IMPORTANT
+    // --------------------------------------------------------
+    // Do not rely only on data.user from login.
+    //
+    // We fetch /auth/me/ after login so that we get:
+    //
+    // id
+    // username
+    // role
+    // branch
+    // permissions
+    // is_superuser
+    // etc.
     // --------------------------------------------------------
 
-    if (data.user) {
+    let user = null;
 
-      storage.setItem(
-        USER_KEY,
-        JSON.stringify(data.user)
+    try {
+      const userResponse = await api.get(
+        "/auth/me/"
       );
+
+      user = normalizeUser(
+        userResponse.data
+      );
+
+      if (user) {
+        authApi.setUser(user);
+      }
+    } catch (error) {
+      // ------------------------------------------------------
+      // Fallback to user returned by login
+      // ------------------------------------------------------
+
+      if (data.user) {
+        user = normalizeUser(
+          data.user
+        );
+
+        authApi.setUser(user);
+      } else {
+        throw error;
+      }
     }
 
-    return data;
-  },
+    // --------------------------------------------------------
+    // Return complete login response
+    // --------------------------------------------------------
 
+    return {
+      ...data,
+      user,
+    };
+  },
 
   // ==========================================================
   // LOGOUT
   // ==========================================================
 
   logout: async () => {
-
     try {
-
       const refreshToken =
         authApi.getRefreshToken();
 
-      /*
-       * This endpoint must exist in Django for
-       * server-side token blacklisting.
-       */
-
       if (refreshToken) {
-
         await api.post(
           "/auth/logout/",
           {
@@ -139,57 +216,47 @@ const authApi = {
           }
         );
       }
-
     } catch (error) {
-
-      /*
-       * Local logout must still happen even if
-       * the backend logout endpoint fails.
-       */
-
       console.warn(
         "Logout API request failed:",
         error
       );
-
     } finally {
-
       authApi.clearStorage();
     }
 
     return true;
   },
 
-
   // ==========================================================
   // GET CURRENT USER
   // ==========================================================
 
   getCurrentUser: async () => {
-
     const response = await api.get(
       "/auth/me/"
     );
 
-    const user = response.data;
+    const user = normalizeUser(
+      response.data
+    );
 
-    authApi.setUser(user);
+    if (user) {
+      authApi.setUser(user);
+    }
 
     return user;
   },
-
 
   // ==========================================================
   // REFRESH ACCESS TOKEN
   // ==========================================================
 
   refreshToken: async () => {
-
     const refreshToken =
       authApi.getRefreshToken();
 
     if (!refreshToken) {
-
       throw new Error(
         "No refresh token available."
       );
@@ -208,14 +275,13 @@ const authApi = {
       data.access || data.access_token;
 
     if (!accessToken) {
-
       throw new Error(
         "No access token returned."
       );
     }
 
     // --------------------------------------------------------
-    // Save new access token
+    // Store new access token
     // --------------------------------------------------------
 
     authApi.setAccessToken(
@@ -230,22 +296,35 @@ const authApi = {
       data.refresh || data.refresh_token;
 
     if (newRefreshToken) {
-
       authApi.setRefreshToken(
         newRefreshToken
+      );
+    }
+
+    // --------------------------------------------------------
+    // Refresh user permissions too
+    // --------------------------------------------------------
+    // This is useful if an administrator changes the user's
+    // permissions while the user is logged in.
+    // --------------------------------------------------------
+
+    try {
+      await authApi.getCurrentUser();
+    } catch (error) {
+      console.warn(
+        "Failed to refresh current user:",
+        error
       );
     }
 
     return data;
   },
 
-
   // ==========================================================
   // GET ACCESS TOKEN
   // ==========================================================
 
   getAccessToken: () => {
-
     return (
       localStorage.getItem(
         ACCESS_TOKEN_KEY
@@ -255,14 +334,12 @@ const authApi = {
       )
     );
   },
-
 
   // ==========================================================
   // GET REFRESH TOKEN
   // ==========================================================
 
   getRefreshToken: () => {
-
     return (
       localStorage.getItem(
         REFRESH_TOKEN_KEY
@@ -273,13 +350,11 @@ const authApi = {
     );
   },
 
-
   // ==========================================================
   // SET ACCESS TOKEN
   // ==========================================================
 
   setAccessToken: (token) => {
-
     if (!token) {
       return;
     }
@@ -288,7 +363,6 @@ const authApi = {
       getActiveStorage();
 
     if (storage) {
-
       storage.setItem(
         ACCESS_TOKEN_KEY,
         token
@@ -297,20 +371,17 @@ const authApi = {
       return;
     }
 
-    // Fallback
     localStorage.setItem(
       ACCESS_TOKEN_KEY,
       token
     );
   },
 
-
   // ==========================================================
   // SET REFRESH TOKEN
   // ==========================================================
 
   setRefreshToken: (token) => {
-
     if (!token) {
       return;
     }
@@ -319,7 +390,6 @@ const authApi = {
       getActiveStorage();
 
     if (storage) {
-
       storage.setItem(
         REFRESH_TOKEN_KEY,
         token
@@ -328,20 +398,17 @@ const authApi = {
       return;
     }
 
-    // Fallback
     localStorage.setItem(
       REFRESH_TOKEN_KEY,
       token
     );
   },
 
-
   // ==========================================================
   // GET STORED USER
   // ==========================================================
 
   getUser: () => {
-
     const user =
       localStorage.getItem(USER_KEY) ||
       sessionStorage.getItem(USER_KEY);
@@ -351,11 +418,10 @@ const authApi = {
     }
 
     try {
-
-      return JSON.parse(user);
-
+      return normalizeUser(
+        JSON.parse(user)
+      );
     } catch (error) {
-
       console.error(
         "Failed to parse stored user:",
         error
@@ -365,25 +431,27 @@ const authApi = {
     }
   },
 
-
   // ==========================================================
   // SET USER
   // ==========================================================
 
   setUser: (user) => {
-
     if (!user) {
       return;
     }
+
+    const normalizedUser =
+      normalizeUser(user);
 
     const storage =
       getActiveStorage();
 
     if (storage) {
-
       storage.setItem(
         USER_KEY,
-        JSON.stringify(user)
+        JSON.stringify(
+          normalizedUser
+        )
       );
 
       return;
@@ -391,31 +459,29 @@ const authApi = {
 
     localStorage.setItem(
       USER_KEY,
-      JSON.stringify(user)
+      JSON.stringify(
+        normalizedUser
+      )
     );
   },
-
 
   // ==========================================================
   // IS AUTHENTICATED
   // ==========================================================
 
   isAuthenticated: () => {
-
     return Boolean(
       authApi.getAccessToken()
     );
   },
-
 
   // ==========================================================
   // CLEAR AUTH STORAGE
   // ==========================================================
 
   clearStorage: () => {
-
     // --------------------------------------------------------
-    // Local Storage
+    // Local storage
     // --------------------------------------------------------
 
     localStorage.removeItem(
@@ -431,7 +497,7 @@ const authApi = {
     );
 
     // --------------------------------------------------------
-    // Session Storage
+    // Session storage
     // --------------------------------------------------------
 
     sessionStorage.removeItem(
@@ -446,61 +512,67 @@ const authApi = {
       USER_KEY
     );
   },
-
 
   // ==========================================================
   // GET USER ROLE
   // ==========================================================
 
   getRole: () => {
-
     const user =
       authApi.getUser();
 
     return user?.role || null;
   },
 
+  // ==========================================================
+  // GET USER ROLE NAME
+  // ==========================================================
+
+  getRoleName: () => {
+    const user =
+      authApi.getUser();
+
+    return user?.role_name || null;
+  },
 
   // ==========================================================
   // GET USER BRANCH
   // ==========================================================
 
   getBranch: () => {
-
     const user =
       authApi.getUser();
 
     return user?.branch || null;
   },
 
-
   // ==========================================================
   // CHECK ROLE
   // ==========================================================
 
   hasRole: (role) => {
-
     const user =
       authApi.getUser();
 
-    if (!user) {
+    if (!user || !role) {
       return false;
     }
 
     return user.role === role;
   },
 
-
   // ==========================================================
   // CHECK ANY ROLE
   // ==========================================================
 
   hasAnyRole: (roles = []) => {
-
     const user =
       authApi.getUser();
 
-    if (!user) {
+    if (
+      !user ||
+      !Array.isArray(roles)
+    ) {
       return false;
     }
 
@@ -509,13 +581,11 @@ const authApi = {
     );
   },
 
-
   // ==========================================================
   // GET USER PERMISSIONS
   // ==========================================================
 
   getPermissions: () => {
-
     const user =
       authApi.getUser();
 
@@ -523,25 +593,36 @@ const authApi = {
       return [];
     }
 
-    return user.permissions || [];
-  },
+    if (
+      user.is_superuser
+    ) {
+      return ["*"];
+    }
 
+    return Array.isArray(
+      user.permissions
+    )
+      ? user.permissions
+      : [];
+  },
 
   // ==========================================================
   // CHECK SINGLE PERMISSION
   // ==========================================================
 
   hasPermission: (permission) => {
-
     const user =
       authApi.getUser();
 
-    if (!user || !permission) {
+    if (
+      !user ||
+      !permission
+    ) {
       return false;
     }
 
     // --------------------------------------------------------
-    // Superuser has all permissions
+    // Superuser
     // --------------------------------------------------------
 
     if (user.is_superuser) {
@@ -549,31 +630,38 @@ const authApi = {
     }
 
     // --------------------------------------------------------
-    // Check permission
+    // Permissions
     // --------------------------------------------------------
 
-    return (
-      Array.isArray(user.permissions) &&
-      user.permissions.includes(permission)
+    const userPermissions =
+      Array.isArray(
+        user.permissions
+      )
+        ? user.permissions
+        : [];
+
+    return userPermissions.includes(
+      String(permission)
     );
   },
-
 
   // ==========================================================
   // CHECK ANY PERMISSION
   // ==========================================================
 
   hasAnyPermission: (permissions = []) => {
-
     const user =
       authApi.getUser();
 
-    if (!user || !Array.isArray(permissions)) {
+    if (
+      !user ||
+      !Array.isArray(permissions)
+    ) {
       return false;
     }
 
     // --------------------------------------------------------
-    // Superuser has all permissions
+    // Superuser
     // --------------------------------------------------------
 
     if (user.is_superuser) {
@@ -581,35 +669,47 @@ const authApi = {
     }
 
     // --------------------------------------------------------
-    // Check if at least one permission exists
+    // User permissions
     // --------------------------------------------------------
 
-    if (!Array.isArray(user.permissions)) {
+    const userPermissions =
+      Array.isArray(
+        user.permissions
+      )
+        ? user.permissions
+        : [];
+
+    if (
+      userPermissions.length === 0
+    ) {
       return false;
     }
 
     return permissions.some(
       (permission) =>
-        user.permissions.includes(permission)
+        userPermissions.includes(
+          String(permission)
+        )
     );
   },
-
 
   // ==========================================================
   // CHECK ALL PERMISSIONS
   // ==========================================================
 
   hasAllPermissions: (permissions = []) => {
-
     const user =
       authApi.getUser();
 
-    if (!user || !Array.isArray(permissions)) {
+    if (
+      !user ||
+      !Array.isArray(permissions)
+    ) {
       return false;
     }
 
     // --------------------------------------------------------
-    // Superuser has all permissions
+    // Superuser
     // --------------------------------------------------------
 
     if (user.is_superuser) {
@@ -617,20 +717,103 @@ const authApi = {
     }
 
     // --------------------------------------------------------
-    // Check if all permissions exist
+    // User permissions
     // --------------------------------------------------------
 
-    if (!Array.isArray(user.permissions)) {
+    const userPermissions =
+      Array.isArray(
+        user.permissions
+      )
+        ? user.permissions
+        : [];
+
+    if (
+      userPermissions.length === 0
+    ) {
       return false;
     }
 
     return permissions.every(
       (permission) =>
-        user.permissions.includes(permission)
+        userPermissions.includes(
+          String(permission)
+        )
     );
   },
 
+  // ==========================================================
+  // CHECK IF USER HAS ANY PERMISSIONS
+  // ==========================================================
+
+  hasPermissions: () => {
+    const user =
+      authApi.getUser();
+
+    if (!user) {
+      return false;
+    }
+
+    if (user.is_superuser) {
+      return true;
+    }
+
+    return (
+      Array.isArray(
+        user.permissions
+      ) &&
+      user.permissions.length > 0
+    );
+  },
+
+  // ==========================================================
+  // GET AUTH DEBUG INFORMATION
+  // ==========================================================
+  // Useful while debugging permission problems.
+  // ==========================================================
+
+  getAuthDebug: () => {
+    const user =
+      authApi.getUser();
+
+    return {
+      authenticated:
+        authApi.isAuthenticated(),
+
+      userId:
+        user?.id || null,
+
+      username:
+        user?.username || null,
+
+      role:
+        user?.role || null,
+
+      roleName:
+        user?.role_name || null,
+
+      branch:
+        user?.branch || null,
+
+      isSuperuser:
+        Boolean(
+          user?.is_superuser
+        ),
+
+      permissions:
+        Array.isArray(
+          user?.permissions
+        )
+          ? user.permissions
+          : [],
+
+      permissionCount:
+        Array.isArray(
+          user?.permissions
+        )
+          ? user.permissions.length
+          : 0,
+    };
+  },
 };
 
 export default authApi;
-

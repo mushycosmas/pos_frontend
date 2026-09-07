@@ -293,6 +293,72 @@ const Purchases = () => {
   };
 
   // ========================================================
+  // GET CREATED BY
+  // ========================================================
+
+  const getCreatedBy = (purchase) => {
+    // Preferred backend field
+    if (
+      purchase?.created_by_name &&
+      typeof purchase.created_by_name === "string"
+    ) {
+      return purchase.created_by_name;
+    }
+
+    // Alternative camelCase field
+    if (
+      purchase?.createdByName &&
+      typeof purchase.createdByName === "string"
+    ) {
+      return purchase.createdByName;
+    }
+
+    // If API returns created_by as a string
+    if (
+      typeof purchase?.created_by === "string"
+    ) {
+      return purchase.created_by;
+    }
+
+    // If API returns createdBy as a string
+    if (
+      typeof purchase?.createdBy === "string"
+    ) {
+      return purchase.createdBy;
+    }
+
+    // Nested created_by object
+    if (
+      purchase?.created_by &&
+      typeof purchase.created_by === "object"
+    ) {
+      return (
+        purchase.created_by.full_name ||
+        purchase.created_by.name ||
+        purchase.created_by.username ||
+        purchase.created_by.email ||
+        "-"
+      );
+    }
+
+    // Nested createdBy object
+    if (
+      purchase?.createdBy &&
+      typeof purchase.createdBy === "object"
+    ) {
+      return (
+        purchase.createdBy.full_name ||
+        purchase.createdBy.name ||
+        purchase.createdBy.username ||
+        purchase.createdBy.email ||
+        "-"
+      );
+    }
+
+    return "-";
+  };
+
+  // ========================================================
   // GET PURCHASE ITEMS
   // ========================================================
 
@@ -602,8 +668,8 @@ const Purchases = () => {
 
       tax,
 
-      // Send total only if your serializer accepts it.
-      // Backend recalculates it anyway.
+      // Backend recalculates this.
+      // Keep it only if the serializer accepts it.
       total: Number(
         item?.total ?? 0
       ),
@@ -662,6 +728,11 @@ const Purchases = () => {
         ).trim(),
 
       items,
+
+      // IMPORTANT:
+      // Do NOT send created_by here.
+      // The backend automatically sets
+      // created_by = request.user.
     };
   };
 
@@ -1259,6 +1330,10 @@ const Purchases = () => {
                     </th>
 
                     <th>
+                      CREATED BY
+                    </th>
+
+                    <th>
                       ITEMS
                     </th>
 
@@ -1289,7 +1364,7 @@ const Purchases = () => {
                     <tr>
 
                       <td
-                        colSpan="9"
+                        colSpan="10"
                         className="text-center py-5 text-muted"
                       >
 
@@ -1313,6 +1388,11 @@ const Purchases = () => {
 
                         const branch =
                           getBranch(
+                            purchase
+                          );
+
+                        const createdBy =
+                          getCreatedBy(
                             purchase
                           );
 
@@ -1375,6 +1455,14 @@ const Purchases = () => {
                             <td>
                               {branch?.name ||
                                 "-"}
+                            </td>
+
+                            {/* CREATED BY */}
+
+                            <td>
+                              <strong>
+                                {createdBy}
+                              </strong>
                             </td>
 
                             {/* ITEMS */}

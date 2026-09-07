@@ -26,7 +26,6 @@ import brandsApi from "../services/brandsApi";
 import categoriesApi from "../services/categoriesApi";
 import suppliersApi from "../services/suppliersApi";
 
-
 // ==========================================================
 // PRODUCTS PAGE
 // ==========================================================
@@ -66,7 +65,6 @@ const Products = () => {
   const [categoryFilter, setCategoryFilter] =
     useState("all");
 
-
   // ========================================================
   // NUMBER HELPER
   // ========================================================
@@ -80,7 +78,6 @@ const Products = () => {
       : 0;
   };
 
-
   // ========================================================
   // FORMAT NUMBER
   // ========================================================
@@ -92,7 +89,6 @@ const Products = () => {
     );
   };
 
-
   // ========================================================
   // FORMAT CURRENCY
   // ========================================================
@@ -101,7 +97,6 @@ const Products = () => {
 
     return `TSh ${formatNumber(value)}`;
   };
-
 
   // ========================================================
   // NORMALIZE API RESPONSE
@@ -116,6 +111,108 @@ const Products = () => {
     return data?.results || [];
   };
 
+  // ========================================================
+  // GET CREATED BY
+  // ========================================================
+
+  const getCreatedBy = (product) => {
+
+    // ------------------------------------------------------
+    // Direct name from API
+    // ------------------------------------------------------
+
+    if (
+      product?.created_by_name &&
+      typeof product.created_by_name === "string"
+    ) {
+      return product.created_by_name;
+    }
+
+    // ------------------------------------------------------
+    // camelCase name
+    // ------------------------------------------------------
+
+    if (
+      product?.createdByName &&
+      typeof product.createdByName === "string"
+    ) {
+      return product.createdByName;
+    }
+
+    // ------------------------------------------------------
+    // Nested created_by object
+    // ------------------------------------------------------
+
+    if (
+      product?.created_by?.name &&
+      typeof product.created_by.name === "string"
+    ) {
+      return product.created_by.name;
+    }
+
+    if (
+      product?.created_by?.full_name &&
+      typeof product.created_by.full_name === "string"
+    ) {
+      return product.created_by.full_name;
+    }
+
+    if (
+      product?.created_by?.username &&
+      typeof product.created_by.username === "string"
+    ) {
+      return product.created_by.username;
+    }
+
+    // ------------------------------------------------------
+    // Nested createdBy object
+    // ------------------------------------------------------
+
+    if (
+      product?.createdBy?.name &&
+      typeof product.createdBy.name === "string"
+    ) {
+      return product.createdBy.name;
+    }
+
+    if (
+      product?.createdBy?.full_name &&
+      typeof product.createdBy.full_name === "string"
+    ) {
+      return product.createdBy.full_name;
+    }
+
+    if (
+      product?.createdBy?.username &&
+      typeof product.createdBy.username === "string"
+    ) {
+      return product.createdBy.username;
+    }
+
+    // ------------------------------------------------------
+    // Seller / user fallback
+    // ------------------------------------------------------
+
+    if (
+      product?.user?.name &&
+      typeof product.user.name === "string"
+    ) {
+      return product.user.name;
+    }
+
+    if (
+      product?.user?.username &&
+      typeof product.user.username === "string"
+    ) {
+      return product.user.username;
+    }
+
+    // ------------------------------------------------------
+    // Final fallback
+    // ------------------------------------------------------
+
+    return "-";
+  };
 
   // ========================================================
   // LOAD PRODUCTS + STOCK
@@ -128,7 +225,6 @@ const Products = () => {
       setLoading(true);
 
       setError("");
-
 
       // ----------------------------------------------------
       // Load products and stock together
@@ -145,7 +241,6 @@ const Products = () => {
 
       ]);
 
-
       // ----------------------------------------------------
       // Normalize responses
       // ----------------------------------------------------
@@ -156,13 +251,11 @@ const Products = () => {
       const stockList =
         normalizeResponse(stocksData);
 
-
       // ----------------------------------------------------
       // Save stock list
       // ----------------------------------------------------
 
       setStocks(stockList);
-
 
       // ----------------------------------------------------
       // Create stock map
@@ -172,7 +265,6 @@ const Products = () => {
 
       const stockMap = new Map();
 
-
       stockList.forEach((stock) => {
 
         const productId =
@@ -181,11 +273,9 @@ const Products = () => {
             stock.product_id
           );
 
-
         if (!productId) {
           return;
         }
-
 
         stockMap.set(
           productId,
@@ -193,7 +283,6 @@ const Products = () => {
         );
 
       });
-
 
       // ----------------------------------------------------
       // Merge stock into products
@@ -207,11 +296,9 @@ const Products = () => {
               Number(product.id)
             );
 
-
           return {
 
             ...product,
-
 
             // ==============================================
             // ACTUAL STOCK
@@ -224,14 +311,12 @@ const Products = () => {
               0
             ),
 
-
             // ==============================================
             // STOCK ID
             // ==============================================
 
             stock_id:
               stock?.id ?? null,
-
 
             // ==============================================
             // RESERVED STOCK
@@ -242,16 +327,14 @@ const Products = () => {
                 stock?.reserved_quantity
               ),
 
-
             // ==============================================
-            // MIN STOCK FROM STOCK TABLE
+            // MIN STOCK
             // ==============================================
 
             min_quantity:
               toNumber(
                 stock?.min_quantity
               ),
-
 
             // ==============================================
             // MAX STOCK
@@ -261,7 +344,6 @@ const Products = () => {
               toNumber(
                 stock?.max_quantity
               ),
-
 
             // ==============================================
             // BRANCH
@@ -273,7 +355,6 @@ const Products = () => {
               product.branch ??
               1,
 
-
             branch_name:
               stock?.branch_name ||
               "",
@@ -281,7 +362,6 @@ const Products = () => {
           };
 
         });
-
 
       // ----------------------------------------------------
       // Save merged products
@@ -298,7 +378,6 @@ const Products = () => {
         err
       );
 
-
       setError(
         "Failed to load products and stock. Please try again."
       );
@@ -310,7 +389,6 @@ const Products = () => {
     }
 
   };
-
 
   // ========================================================
   // LOAD BRANDS
@@ -338,7 +416,6 @@ const Products = () => {
 
   };
 
-
   // ========================================================
   // LOAD CATEGORIES
   // ========================================================
@@ -364,7 +441,6 @@ const Products = () => {
     }
 
   };
-
 
   // ========================================================
   // LOAD SUPPLIERS
@@ -392,7 +468,6 @@ const Products = () => {
 
   };
 
-
   // ========================================================
   // INITIAL LOAD
   // ========================================================
@@ -416,11 +491,9 @@ const Products = () => {
 
       };
 
-
     loadInitialData();
 
   }, []);
-
 
   // ========================================================
   // GET BRAND
@@ -436,12 +509,10 @@ const Products = () => {
 
     }
 
-
     const brandId =
       product.brand ??
       product.brand_id ??
       product.brandId;
-
 
     return brands.find(
       (brand) =>
@@ -450,7 +521,6 @@ const Products = () => {
     );
 
   };
-
 
   // ========================================================
   // GET CATEGORY
@@ -466,12 +536,10 @@ const Products = () => {
 
     }
 
-
     const categoryId =
       product.category ??
       product.category_id ??
       product.categoryId;
-
 
     return categories.find(
       (category) =>
@@ -480,7 +548,6 @@ const Products = () => {
     );
 
   };
-
 
   // ========================================================
   // GET SUPPLIER
@@ -496,12 +563,10 @@ const Products = () => {
 
     }
 
-
     const supplierId =
       product.supplier ??
       product.supplier_id ??
       product.supplierId;
-
 
     return suppliers.find(
       (supplier) =>
@@ -510,7 +575,6 @@ const Products = () => {
     );
 
   };
-
 
   // ========================================================
   // GET ACTUAL STOCK
@@ -526,7 +590,6 @@ const Products = () => {
     );
 
   };
-
 
   // ========================================================
   // GET MINIMUM STOCK
@@ -544,7 +607,6 @@ const Products = () => {
 
   };
 
-
   // ========================================================
   // GET PRODUCT STATUS
   // ========================================================
@@ -557,7 +619,6 @@ const Products = () => {
     const minStock =
       getMinStock(product);
 
-
     if (stock <= 0) {
 
       return {
@@ -566,7 +627,6 @@ const Products = () => {
       };
 
     }
-
 
     if (
       minStock > 0 &&
@@ -580,14 +640,12 @@ const Products = () => {
 
     }
 
-
     return {
       text: "In Stock",
       variant: "success",
     };
 
   };
-
 
   // ========================================================
   // FILTER PRODUCTS
@@ -601,7 +659,6 @@ const Products = () => {
           .trim()
           .toLowerCase();
 
-
       return products.filter(
         (product) => {
 
@@ -614,25 +671,27 @@ const Products = () => {
               product.name || ""
             ).toLowerCase();
 
-
           const sku =
             String(
               product.sku || ""
             ).toLowerCase();
-
 
           const barcode =
             String(
               product.barcode || ""
             ).toLowerCase();
 
+          const createdBy =
+            String(
+              getCreatedBy(product)
+            ).toLowerCase();
 
           const matchesSearch =
             !keyword ||
             name.includes(keyword) ||
             sku.includes(keyword) ||
-            barcode.includes(keyword);
-
+            barcode.includes(keyword) ||
+            createdBy.includes(keyword);
 
           // ----------------------------------------------
           // BRAND
@@ -643,12 +702,10 @@ const Products = () => {
             product.brand_id ??
             product.brandId;
 
-
           const matchesBrand =
             brandFilter === "all" ||
             Number(productBrand) ===
               Number(brandFilter);
-
 
           // ----------------------------------------------
           // CATEGORY
@@ -659,12 +716,10 @@ const Products = () => {
             product.category_id ??
             product.categoryId;
 
-
           const matchesCategory =
             categoryFilter === "all" ||
             Number(productCategory) ===
               Number(categoryFilter);
-
 
           // ----------------------------------------------
           // STOCK STATUS
@@ -676,9 +731,7 @@ const Products = () => {
           const minStock =
             getMinStock(product);
 
-
           let matchesStatus = true;
-
 
           if (
             statusFilter ===
@@ -694,7 +747,6 @@ const Products = () => {
 
           }
 
-
           if (
             statusFilter ===
             "low-stock"
@@ -707,7 +759,6 @@ const Products = () => {
 
           }
 
-
           if (
             statusFilter ===
             "out-of-stock"
@@ -717,7 +768,6 @@ const Products = () => {
               stock <= 0;
 
           }
-
 
           return (
             matchesSearch &&
@@ -737,14 +787,12 @@ const Products = () => {
       statusFilter,
     ]);
 
-
   // ========================================================
   // STATISTICS
   // ========================================================
 
   const totalProducts =
     products.length;
-
 
   const totalStock =
     products.reduce(
@@ -753,7 +801,6 @@ const Products = () => {
       0
     );
 
-
   const inventoryValue =
     products.reduce(
       (sum, product) => {
@@ -761,13 +808,11 @@ const Products = () => {
         const stock =
           getStock(product);
 
-
         const cost =
           toNumber(
             product.cost_price ??
             product.costPrice
           );
-
 
         return (
           sum +
@@ -777,7 +822,6 @@ const Products = () => {
       },
       0
     );
-
 
   const lowStockProducts =
     products.filter(
@@ -789,7 +833,6 @@ const Products = () => {
         const minStock =
           getMinStock(product);
 
-
         return (
           stock > 0 &&
           minStock > 0 &&
@@ -799,13 +842,11 @@ const Products = () => {
       }
     ).length;
 
-
   const outOfStockProducts =
     products.filter(
       (product) =>
         getStock(product) <= 0
     ).length;
-
 
   // ========================================================
   // ADD PRODUCT
@@ -819,7 +860,6 @@ const Products = () => {
 
   };
 
-
   // ========================================================
   // EDIT PRODUCT
   // ========================================================
@@ -831,7 +871,6 @@ const Products = () => {
     setShowModal(true);
 
   };
-
 
   // ========================================================
   // DELETE PRODUCT
@@ -845,16 +884,13 @@ const Products = () => {
           "Are you sure you want to delete this product?"
         );
 
-
       if (!confirmed) {
         return;
       }
 
-
       try {
 
         await productsApi.delete(id);
-
 
         setProducts(
           (currentProducts) =>
@@ -871,7 +907,6 @@ const Products = () => {
           err
         );
 
-
         alert(
           "Failed to delete product."
         );
@@ -879,7 +914,6 @@ const Products = () => {
       }
 
     };
-
 
   // ========================================================
   // SAVE PRODUCT
@@ -894,7 +928,6 @@ const Products = () => {
           "SAVING PRODUCT:",
           data
         );
-
 
         if (editingProduct) {
 
@@ -911,11 +944,9 @@ const Products = () => {
 
         }
 
-
         setShowModal(false);
 
         setEditingProduct(null);
-
 
         // -----------------------------------------------
         // Reload products + stock
@@ -930,12 +961,10 @@ const Products = () => {
           err
         );
 
-
         console.error(
           "API RESPONSE:",
           err?.response?.data
         );
-
 
         alert(
           "Failed to save product. Check the console for details."
@@ -944,7 +973,6 @@ const Products = () => {
       }
 
     };
-
 
   // ========================================================
   // RESET FILTERS
@@ -961,7 +989,6 @@ const Products = () => {
     setStatusFilter("all");
 
   };
-
 
   // ========================================================
   // RENDER
@@ -989,7 +1016,6 @@ const Products = () => {
 
         </div>
 
-
         <Button
           variant="primary"
           onClick={
@@ -1004,7 +1030,6 @@ const Products = () => {
         </Button>
 
       </div>
-
 
       {/* ==================================================
           ERROR
@@ -1030,7 +1055,6 @@ const Products = () => {
         </Alert>
 
       )}
-
 
       {/* ==================================================
           STATISTICS
@@ -1062,7 +1086,6 @@ const Products = () => {
 
         </Col>
 
-
         <Col xl={3} md={6}>
 
           <Card className="dashboard-card border-0 h-100">
@@ -1087,7 +1110,6 @@ const Products = () => {
 
         </Col>
 
-
         <Col xl={3} md={6}>
 
           <Card className="dashboard-card border-0 h-100">
@@ -1111,7 +1133,6 @@ const Products = () => {
           </Card>
 
         </Col>
-
 
         <Col xl={3} md={6}>
 
@@ -1140,7 +1161,6 @@ const Products = () => {
 
       </Row>
 
-
       {/* ==================================================
           PRODUCTS
       ================================================== */}
@@ -1168,7 +1188,6 @@ const Products = () => {
 
           </div>
 
-
           {/* ==================================================
               FILTERS
           ================================================== */}
@@ -1185,9 +1204,8 @@ const Products = () => {
 
                 </InputGroup.Text>
 
-
                 <Form.Control
-                  placeholder="Search product, SKU or barcode..."
+                  placeholder="Search product, SKU, barcode or created by..."
                   value={search}
                   onChange={(e) =>
                     setSearch(
@@ -1199,7 +1217,6 @@ const Products = () => {
               </InputGroup>
 
             </Col>
-
 
             <Col lg={2}>
 
@@ -1215,7 +1232,6 @@ const Products = () => {
                 <option value="all">
                   All Brands
                 </option>
-
 
                 {brands.map(
                   (brand) => (
@@ -1234,7 +1250,6 @@ const Products = () => {
 
             </Col>
 
-
             <Col lg={2}>
 
               <Form.Select
@@ -1249,7 +1264,6 @@ const Products = () => {
                 <option value="all">
                   All Categories
                 </option>
-
 
                 {categories.map(
                   (category) => (
@@ -1267,7 +1281,6 @@ const Products = () => {
               </Form.Select>
 
             </Col>
-
 
             <Col lg={2}>
 
@@ -1300,7 +1313,6 @@ const Products = () => {
 
             </Col>
 
-
             <Col lg={2}>
 
               <Button
@@ -1320,7 +1332,6 @@ const Products = () => {
             </Col>
 
           </Row>
-
 
           {/* ==================================================
               LOADING
@@ -1375,6 +1386,10 @@ const Products = () => {
                     </th>
 
                     <th>
+                      CREATED BY
+                    </th>
+
+                    <th>
                       COST
                     </th>
 
@@ -1398,7 +1413,6 @@ const Products = () => {
 
                 </thead>
 
-
                 <tbody>
 
                   {filteredProducts.length === 0 ? (
@@ -1406,7 +1420,7 @@ const Products = () => {
                     <tr>
 
                       <td
-                        colSpan="10"
+                        colSpan="11"
                         className="text-center py-5 text-muted"
                       >
                         No products found.
@@ -1424,30 +1438,30 @@ const Products = () => {
                             product
                           );
 
-
                         const category =
                           getCategory(
                             product
                           );
-
 
                         const supplier =
                           getSupplier(
                             product
                           );
 
+                        const createdBy =
+                          getCreatedBy(
+                            product
+                          );
 
                         const stock =
                           getStock(
                             product
                           );
 
-
                         const status =
                           getProductStatus(
                             product
                           );
-
 
                         const costPrice =
                           toNumber(
@@ -1455,13 +1469,11 @@ const Products = () => {
                             product.costPrice
                           );
 
-
                         const sellingPrice =
                           toNumber(
                             product.selling_price ??
                             product.sellingPrice
                           );
-
 
                         return (
 
@@ -1471,12 +1483,13 @@ const Products = () => {
                             }
                           >
 
+                            {/* PRODUCT */}
+
                             <td>
 
                               <strong>
                                 {product.name}
                               </strong>
-
 
                               {product.barcode && (
 
@@ -1490,6 +1503,7 @@ const Products = () => {
 
                             </td>
 
+                            {/* SKU */}
 
                             <td>
 
@@ -1500,24 +1514,38 @@ const Products = () => {
 
                             </td>
 
+                            {/* BRAND */}
 
                             <td>
                               {brand?.name ||
                                 "-"}
                             </td>
 
+                            {/* CATEGORY */}
 
                             <td>
                               {category?.name ||
                                 "-"}
                             </td>
 
+                            {/* SUPPLIER */}
 
                             <td>
                               {supplier?.name ||
                                 "-"}
                             </td>
 
+                            {/* CREATED BY */}
+
+                            <td>
+
+                              <span className="fw-semibold">
+                                {createdBy}
+                              </span>
+
+                            </td>
+
+                            {/* COST */}
 
                             <td>
                               {formatCurrency(
@@ -1525,6 +1553,7 @@ const Products = () => {
                               )}
                             </td>
 
+                            {/* PRICE */}
 
                             <td>
 
@@ -1536,6 +1565,7 @@ const Products = () => {
 
                             </td>
 
+                            {/* STOCK */}
 
                             <td>
 
@@ -1547,6 +1577,7 @@ const Products = () => {
 
                             </td>
 
+                            {/* STATUS */}
 
                             <td>
 
@@ -1560,6 +1591,7 @@ const Products = () => {
 
                             </td>
 
+                            {/* ACTION */}
 
                             <td>
 
@@ -1574,7 +1606,6 @@ const Products = () => {
                                   <i className="bi bi-three-dots-vertical" />
 
                                 </Dropdown.Toggle>
-
 
                                 <Dropdown.Menu>
 
@@ -1591,7 +1622,6 @@ const Products = () => {
                                     Edit
 
                                   </Dropdown.Item>
-
 
                                   <Dropdown.Item
                                     className="text-danger"
@@ -1635,7 +1665,6 @@ const Products = () => {
 
       </Card>
 
-
       {/* ==================================================
           PRODUCT MODAL
       ================================================== */}
@@ -1668,6 +1697,5 @@ const Products = () => {
   );
 
 };
-
 
 export default Products;

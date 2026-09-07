@@ -1,3 +1,4 @@
+
 import React, {
   createContext,
   useContext,
@@ -78,25 +79,18 @@ export const AuthProvider = ({ children }) => {
 
 
         // ----------------------------------------------------
-        // Load stored user
+        // Load stored user immediately
         // ----------------------------------------------------
 
         if (storedUser) {
 
           setUser(storedUser);
-
         }
 
 
-        /*
-         * Optional:
-         *
-         * If your backend has /auth/me/,
-         * we can verify the current user here.
-         *
-         * This is intentionally enabled because
-         * your authApi already provides getCurrentUser().
-         */
+        // ----------------------------------------------------
+        // Verify and refresh current user
+        // ----------------------------------------------------
 
         try {
 
@@ -106,7 +100,6 @@ export const AuthProvider = ({ children }) => {
           if (currentUser) {
 
             setUser(currentUser);
-
           }
 
         } catch (error) {
@@ -117,10 +110,10 @@ export const AuthProvider = ({ children }) => {
           );
 
           /*
-           * Do NOT immediately logout here.
+           * We don't immediately logout here.
            *
-           * The stored authentication can still be
-           * valid if /auth/me/ has not been implemented.
+           * The API interceptor can handle expired
+           * access tokens using the refresh token.
            */
         }
 
@@ -131,10 +124,12 @@ export const AuthProvider = ({ children }) => {
           error
         );
 
+        setUser(null);
+        setAccessToken(null);
+
       } finally {
 
         setLoading(false);
-
       }
     };
 
@@ -163,7 +158,7 @@ export const AuthProvider = ({ children }) => {
 
 
       // ------------------------------------------------------
-      // Update React state
+      // Get stored authentication data
       // ------------------------------------------------------
 
       const token =
@@ -172,6 +167,10 @@ export const AuthProvider = ({ children }) => {
       const loggedInUser =
         authApi.getUser();
 
+
+      // ------------------------------------------------------
+      // Update React state
+      // ------------------------------------------------------
 
       setAccessToken(token);
       setUser(loggedInUser);
@@ -209,7 +208,6 @@ export const AuthProvider = ({ children }) => {
 
         message =
           error.message;
-
       }
 
 
@@ -281,6 +279,32 @@ export const AuthProvider = ({ children }) => {
       setAccessToken(token);
 
 
+      /*
+       * Refresh current user as well.
+       *
+       * This is useful because permissions can be
+       * changed by an administrator.
+       */
+
+      try {
+
+        const currentUser =
+          await authApi.getCurrentUser();
+
+        if (currentUser) {
+
+          setUser(currentUser);
+        }
+
+      } catch (userError) {
+
+        console.warn(
+          "Could not refresh current user:",
+          userError
+        );
+      }
+
+
       return {
         success: true,
         data,
@@ -295,7 +319,7 @@ export const AuthProvider = ({ children }) => {
 
 
       // ------------------------------------------------------
-      // Refresh failed = authentication is no longer valid
+      // Refresh failed = authentication expired
       // ------------------------------------------------------
 
       authApi.clearStorage();
@@ -401,13 +425,126 @@ export const AuthProvider = ({ children }) => {
 
 
   // ==========================================================
+  // PERMISSION HELPERS
+  // ==========================================================
+
+  const getPermissions = () => {
+
+    if (!user) {
+      return [];
+    }
+
+    return user.permissions || [];
+  };
+
+
+  // ==========================================================
+  // CHECK SINGLE PERMISSION
+  // ==========================================================
+
+  const hasPermission = (permission) => {
+
+    if (!user || !permission) {
+      return false;
+    }
+
+
+    // --------------------------------------------------------
+    // Superuser has all permissions
+    // --------------------------------------------------------
+
+    if (user.is_superuser) {
+      return true;
+    }
+
+
+    // --------------------------------------------------------
+    // Check permission
+    // --------------------------------------------------------
+
+    return (
+      Array.isArray(user.permissions) &&
+      user.permissions.includes(permission)
+    );
+  };
+
+
+  // ==========================================================
+  // CHECK ANY PERMISSION
+  // ==========================================================
+
+  const hasAnyPermission = (permissions = []) => {
+
+    if (
+      !user ||
+      !Array.isArray(permissions)
+    ) {
+      return false;
+    }
+
+
+    // --------------------------------------------------------
+    // Superuser has all permissions
+    // --------------------------------------------------------
+
+    if (user.is_superuser) {
+      return true;
+    }
+
+
+    if (!Array.isArray(user.permissions)) {
+      return false;
+    }
+
+
+    return permissions.some(
+      (permission) =>
+        user.permissions.includes(permission)
+    );
+  };
+
+
+  // ==========================================================
+  // CHECK ALL PERMISSIONS
+  // ==========================================================
+
+  const hasAllPermissions = (permissions = []) => {
+
+    if (
+      !user ||
+      !Array.isArray(permissions)
+    ) {
+      return false;
+    }
+
+
+    // --------------------------------------------------------
+    // Superuser has all permissions
+    // --------------------------------------------------------
+
+    if (user.is_superuser) {
+      return true;
+    }
+
+
+    if (!Array.isArray(user.permissions)) {
+      return false;
+    }
+
+
+    return permissions.every(
+      (permission) =>
+        user.permissions.includes(permission)
+    );
+  };
+
+
+  // ==========================================================
   // AUTHENTICATION STATUS
   // ==========================================================
 
   const isAuthenticated =
-    Boolean(
-      accessToken
-    );
+    Boolean(accessToken);
 
 
   // ==========================================================
@@ -471,6 +608,19 @@ export const AuthProvider = ({ children }) => {
 
     getBranch,
 
+
+    // --------------------------------------------------------
+    // Permissions
+    // --------------------------------------------------------
+
+    getPermissions,
+
+    hasPermission,
+
+    hasAnyPermission,
+
+    hasAllPermissions,
+
   };
 
 
@@ -497,7 +647,6 @@ export const useAuth = () => {
     throw new Error(
       "useAuth must be used inside AuthProvider"
     );
-
   }
 
 
@@ -506,3 +655,4 @@ export const useAuth = () => {
 
 
 export default AuthContext;
+

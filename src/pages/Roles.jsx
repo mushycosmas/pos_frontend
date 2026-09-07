@@ -1,4 +1,11 @@
-import React, { useEffect, useMemo, useState } from "react";
+
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+
 import {
   Alert,
   Badge,
@@ -12,6 +19,7 @@ import {
   Spinner,
   Table,
 } from "react-bootstrap";
+
 import {
   FaEdit,
   FaPlus,
@@ -30,6 +38,7 @@ import {
 import roleApi from "../services/role";
 import permissionApi from "../services/permission";
 
+
 const Roles = () => {
   // =========================================================
   // STATE
@@ -39,18 +48,26 @@ const Roles = () => {
   const [permissions, setPermissions] = useState([]);
 
   const [loading, setLoading] = useState(true);
-  const [permissionsLoading, setPermissionsLoading] = useState(false);
+  const [permissionsLoading, setPermissionsLoading] =
+    useState(false);
   const [saving, setSaving] = useState(false);
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] =
+    useState("all");
 
-  // Role modal
-  const [showRoleModal, setShowRoleModal] = useState(false);
-  const [editingRole, setEditingRole] = useState(null);
+  // =========================================================
+  // ROLE MODAL
+  // =========================================================
+
+  const [showRoleModal, setShowRoleModal] =
+    useState(false);
+
+  const [editingRole, setEditingRole] =
+    useState(null);
 
   const [roleForm, setRoleForm] = useState({
     name: "",
@@ -59,18 +76,72 @@ const Roles = () => {
     is_active: true,
   });
 
-  // Permission modal
-  const [showPermissionModal, setShowPermissionModal] = useState(false);
-  const [selectedRole, setSelectedRole] = useState(null);
-  const [selectedPermissions, setSelectedPermissions] = useState([]);
-
   // =========================================================
-  // LOAD DATA
+  // PERMISSION MODAL
   // =========================================================
 
-  useEffect(() => {
-    loadRoles();
-  }, []);
+  const [
+    showPermissionModal,
+    setShowPermissionModal,
+  ] = useState(false);
+
+  const [selectedRole, setSelectedRole] =
+    useState(null);
+
+  const [
+    selectedPermissions,
+    setSelectedPermissions,
+  ] = useState([]);
+
+  const [
+    permissionSearch,
+    setPermissionSearch,
+  ] = useState("");
+
+  // Master checkbox reference
+  const selectAllRef = useRef(null);
+
+
+  // =========================================================
+  // CLEAR MESSAGES
+  // =========================================================
+
+  const clearMessages = () => {
+    setError("");
+    setSuccess("");
+  };
+
+
+  // =========================================================
+  // EXTRACT API RESULTS
+  // =========================================================
+
+  const extractResults = (response) => {
+    if (Array.isArray(response)) {
+      return response;
+    }
+
+    if (
+      response &&
+      Array.isArray(response.results)
+    ) {
+      return response.results;
+    }
+
+    if (
+      response &&
+      Array.isArray(response.permissions)
+    ) {
+      return response.permissions;
+    }
+
+    return [];
+  };
+
+
+  // =========================================================
+  // LOAD ROLES
+  // =========================================================
 
   const loadRoles = async () => {
     try {
@@ -79,24 +150,14 @@ const Roles = () => {
 
       const response = await roleApi.getAll();
 
-      /*
-       * DRF pagination can return:
-       * {
-       *   count: 10,
-       *   next: "...",
-       *   previous: null,
-       *   results: []
-       * }
-       *
-       * Or a direct array.
-       */
-      const data = Array.isArray(response)
-        ? response
-        : response?.results || [];
+      const data = extractResults(response);
 
       setRoles(data);
     } catch (err) {
-      console.error("Failed to load roles:", err);
+      console.error(
+        "Failed to load roles:",
+        err
+      );
 
       setError(
         err?.response?.data?.detail ||
@@ -108,22 +169,28 @@ const Roles = () => {
     }
   };
 
+
+  // =========================================================
+  // LOAD PERMISSIONS
+  // =========================================================
+
   const loadPermissions = async () => {
     try {
       setPermissionsLoading(true);
-      setError("");
 
-      const response = await permissionApi.getAll();
+      const response =
+        await permissionApi.getAll();
 
-      const data = Array.isArray(response)
-        ? response
-        : response?.results || [];
+      const data = extractResults(response);
 
       setPermissions(data);
 
       return data;
     } catch (err) {
-      console.error("Failed to load permissions:", err);
+      console.error(
+        "Failed to load permissions:",
+        err
+      );
 
       setError(
         err?.response?.data?.detail ||
@@ -137,19 +204,36 @@ const Roles = () => {
     }
   };
 
+
+  // =========================================================
+  // INITIAL LOAD
+  // =========================================================
+
+  useEffect(() => {
+    loadRoles();
+  }, []);
+
+
   // =========================================================
   // FILTER ROLES
   // =========================================================
 
   const filteredRoles = useMemo(() => {
     return roles.filter((role) => {
-      const searchText = search.toLowerCase().trim();
+      const searchText =
+        search.toLowerCase().trim();
 
       const matchesSearch =
         !searchText ||
-        role.name?.toLowerCase().includes(searchText) ||
-        role.code?.toLowerCase().includes(searchText) ||
-        role.description?.toLowerCase().includes(searchText);
+        role.name
+          ?.toLowerCase()
+          .includes(searchText) ||
+        role.code
+          ?.toLowerCase()
+          .includes(searchText) ||
+        role.description
+          ?.toLowerCase()
+          .includes(searchText);
 
       const isActive =
         role.is_active !== false &&
@@ -157,12 +241,22 @@ const Roles = () => {
 
       const matchesStatus =
         statusFilter === "all" ||
-        (statusFilter === "active" && isActive) ||
-        (statusFilter === "inactive" && !isActive);
+        (statusFilter === "active" &&
+          isActive) ||
+        (statusFilter === "inactive" &&
+          !isActive);
 
-      return matchesSearch && matchesStatus;
+      return (
+        matchesSearch &&
+        matchesStatus
+      );
     });
-  }, [roles, search, statusFilter]);
+  }, [
+    roles,
+    search,
+    statusFilter,
+  ]);
+
 
   // =========================================================
   // STATISTICS
@@ -176,13 +270,17 @@ const Roles = () => {
       role.is_active !== 0
   ).length;
 
-  const inactiveRoles = totalRoles - activeRoles;
+  const inactiveRoles =
+    totalRoles - activeRoles;
+
 
   // =========================================================
-  // ROLE MODAL
+  // CREATE ROLE MODAL
   // =========================================================
 
   const openCreateModal = () => {
+    clearMessages();
+
     setEditingRole(null);
 
     setRoleForm({
@@ -192,32 +290,41 @@ const Roles = () => {
       is_active: true,
     });
 
-    setError("");
-    setSuccess("");
-
     setShowRoleModal(true);
   };
 
+
+  // =========================================================
+  // EDIT ROLE MODAL
+  // =========================================================
+
   const openEditModal = (role) => {
+    clearMessages();
+
     setEditingRole(role);
 
     setRoleForm({
       name: role.name || "",
       code: role.code || "",
-      description: role.description || "",
+      description:
+        role.description || "",
       is_active:
         role.is_active !== false &&
         role.is_active !== 0,
     });
 
-    setError("");
-    setSuccess("");
-
     setShowRoleModal(true);
   };
 
+
+  // =========================================================
+  // CLOSE ROLE MODAL
+  // =========================================================
+
   const closeRoleModal = () => {
-    if (saving) return;
+    if (saving) {
+      return;
+    }
 
     setShowRoleModal(false);
     setEditingRole(null);
@@ -230,8 +337,9 @@ const Roles = () => {
     });
   };
 
+
   // =========================================================
-  // AUTO CODE
+  // GENERATE ROLE CODE
   // =========================================================
 
   const generateCode = (name) => {
@@ -242,10 +350,19 @@ const Roles = () => {
       .replace(/^_+|_+$/g, "");
   };
 
-  const handleRoleNameChange = (value) => {
+
+  // =========================================================
+  // ROLE NAME CHANGE
+  // =========================================================
+
+  const handleRoleNameChange = (
+    value
+  ) => {
     setRoleForm((previous) => ({
       ...previous,
+
       name: value,
+
       ...(editingRole
         ? {}
         : {
@@ -254,36 +371,49 @@ const Roles = () => {
     }));
   };
 
+
   // =========================================================
   // SAVE ROLE
   // =========================================================
 
-  const handleRoleSubmit = async (event) => {
+  const handleRoleSubmit = async (
+    event
+  ) => {
     event.preventDefault();
 
-    const name = roleForm.name.trim();
-    const code = roleForm.code.trim().toLowerCase();
+    const name =
+      roleForm.name.trim();
+
+    const code =
+      roleForm.code
+        .trim()
+        .toLowerCase();
 
     if (!name) {
-      setError("Role name is required.");
+      setError(
+        "Role name is required."
+      );
       return;
     }
 
     if (!code) {
-      setError("Role code is required.");
+      setError(
+        "Role code is required."
+      );
       return;
     }
 
     try {
       setSaving(true);
-      setError("");
-      setSuccess("");
+      clearMessages();
 
       const payload = {
         name,
         code,
-        description: roleForm.description.trim(),
-        is_active: roleForm.is_active,
+        description:
+          roleForm.description.trim(),
+        is_active:
+          roleForm.is_active,
       };
 
       if (editingRole) {
@@ -292,11 +422,17 @@ const Roles = () => {
           payload
         );
 
-        setSuccess("Role updated successfully.");
+        setSuccess(
+          "Role updated successfully."
+        );
       } else {
-        await roleApi.create(payload);
+        await roleApi.create(
+          payload
+        );
 
-        setSuccess("Role created successfully.");
+        setSuccess(
+          "Role created successfully."
+        );
       }
 
       closeRoleModal();
@@ -307,23 +443,38 @@ const Roles = () => {
         setSuccess("");
       }, 3000);
     } catch (err) {
-      console.error("Failed to save role:", err);
+      console.error(
+        "Failed to save role:",
+        err
+      );
 
-      const data = err?.response?.data;
+      const data =
+        err?.response?.data;
 
-      if (typeof data === "object" && data !== null) {
-        const messages = Object.entries(data)
-          .map(([field, value]) => {
-            if (Array.isArray(value)) {
-              return `${field}: ${value.join(", ")}`;
-            }
+      if (
+        typeof data === "object" &&
+        data !== null
+      ) {
+        const messages =
+          Object.entries(data)
+            .map(
+              ([field, value]) => {
+                if (
+                  Array.isArray(value)
+                ) {
+                  return `${field}: ${value.join(
+                    ", "
+                  )}`;
+                }
 
-            return `${field}: ${value}`;
-          })
-          .join(" | ");
+                return `${field}: ${value}`;
+              }
+            )
+            .join(" | ");
 
         setError(
-          messages || "Failed to save role."
+          messages ||
+            "Failed to save role."
         );
       } else {
         setError(
@@ -336,22 +487,30 @@ const Roles = () => {
     }
   };
 
+
   // =========================================================
   // DELETE ROLE
   // =========================================================
 
-  const handleDeleteRole = async (role) => {
-    const confirmed = window.confirm(
-      `Are you sure you want to delete the role "${role.name}"?`
-    );
+  const handleDeleteRole = async (
+    role
+  ) => {
+    const confirmed =
+      window.confirm(
+        `Are you sure you want to delete the role "${role.name}"?`
+      );
 
-    if (!confirmed) return;
+    if (!confirmed) {
+      return;
+    }
 
     try {
-      setError("");
-      setSuccess("");
+      setSaving(true);
+      clearMessages();
 
-      await roleApi.delete(role.id);
+      await roleApi.delete(
+        role.id
+      );
 
       setSuccess(
         `Role "${role.name}" deleted successfully.`
@@ -363,37 +522,49 @@ const Roles = () => {
         setSuccess("");
       }, 3000);
     } catch (err) {
-      console.error("Failed to delete role:", err);
+      console.error(
+        "Failed to delete role:",
+        err
+      );
 
       setError(
         err?.response?.data?.detail ||
           err?.response?.data?.message ||
           "Failed to delete role."
       );
+    } finally {
+      setSaving(false);
     }
   };
 
+
   // =========================================================
-  // ACTIVATE / DEACTIVATE
+  // ACTIVATE / DEACTIVATE ROLE
   // =========================================================
 
-  const handleToggleStatus = async (role) => {
+  const handleToggleStatus = async (
+    role
+  ) => {
     const isActive =
       role.is_active !== false &&
       role.is_active !== 0;
 
     try {
-      setError("");
-      setSuccess("");
+      setSaving(true);
+      clearMessages();
 
       if (isActive) {
-        await roleApi.deactivate(role.id);
+        await roleApi.deactivate(
+          role.id
+        );
 
         setSuccess(
           `Role "${role.name}" has been deactivated.`
         );
       } else {
-        await roleApi.activate(role.id);
+        await roleApi.activate(
+          role.id
+        );
 
         setSuccess(
           `Role "${role.name}" has been activated.`
@@ -416,213 +587,489 @@ const Roles = () => {
           err?.response?.data?.message ||
           "Failed to change role status."
       );
+    } finally {
+      setSaving(false);
     }
   };
 
+
   // =========================================================
-  // PERMISSION MODAL
+  // OPEN PERMISSION MODAL
   // =========================================================
 
-  const openPermissionModal = async (role) => {
-    setSelectedRole(role);
-    setSelectedPermissions([]);
+  const openPermissionModal =
+    async (role) => {
+      setSelectedRole(role);
+      setSelectedPermissions([]);
+      setPermissionSearch("");
 
-    setShowPermissionModal(true);
+      setShowPermissionModal(true);
 
-    try {
-      setPermissionsLoading(true);
-      setError("");
+      try {
+        setPermissionsLoading(true);
+        setError("");
 
-      const [allPermissionsResponse, rolePermissionsResponse] =
-        await Promise.all([
+        const [
+          allPermissionsResponse,
+          rolePermissionsResponse,
+        ] = await Promise.all([
           permissionApi.getAll(),
-          roleApi.getPermissions(role.id),
+          roleApi.getPermissions(
+            role.id
+          ),
         ]);
 
-      const allPermissions = Array.isArray(
-        allPermissionsResponse
-      )
-        ? allPermissionsResponse
-        : allPermissionsResponse?.results || [];
+        const allPermissions =
+          extractResults(
+            allPermissionsResponse
+          );
 
-      const rolePermissions = Array.isArray(
-        rolePermissionsResponse
-      )
-        ? rolePermissionsResponse
-        : rolePermissionsResponse?.results ||
-          rolePermissionsResponse?.permissions ||
-          [];
+        const rolePermissions =
+          extractResults(
+            rolePermissionsResponse
+          );
 
-      setPermissions(allPermissions);
+        setPermissions(
+          allPermissions
+        );
 
-      /*
-       * Backend may return:
-       *
-       * [
-       *   { id: 1, name: "View Sales" }
-       * ]
-       *
-       * OR
-       *
-       * [
-       *   1,
-       *   2,
-       *   3
-       * ]
-       */
-      const ids = rolePermissions
-        .map((permission) => {
-          if (
-            typeof permission === "object"
-          ) {
-            return permission.id;
-          }
+        /*
+         * Backend can return:
+         *
+         * [
+         *   {
+         *     id: 1,
+         *     name: "View Sales"
+         *   }
+         * ]
+         *
+         * OR:
+         *
+         * [
+         *   1,
+         *   2,
+         *   3
+         * ]
+         */
 
-          return permission;
-        })
-        .filter(Boolean);
+        const ids =
+          rolePermissions
+            .map((permission) => {
+              if (
+                permission &&
+                typeof permission ===
+                  "object"
+              ) {
+                return permission.id;
+              }
 
-      setSelectedPermissions(ids);
-    } catch (err) {
-      console.error(
-        "Failed to load role permissions:",
-        err
-      );
+              return permission;
+            })
+            .filter(
+              (id) =>
+                id !== null &&
+                id !== undefined
+            );
 
-      setError(
-        err?.response?.data?.detail ||
-          err?.response?.data?.message ||
-          "Failed to load role permissions."
-      );
-    } finally {
-      setPermissionsLoading(false);
-    }
-  };
+        setSelectedPermissions(
+          ids
+        );
+      } catch (err) {
+        console.error(
+          "Failed to load role permissions:",
+          err
+        );
 
-  const closePermissionModal = () => {
-    if (saving) return;
-
-    setShowPermissionModal(false);
-    setSelectedRole(null);
-    setSelectedPermissions([]);
-  };
-
-  // =========================================================
-  // TOGGLE PERMISSION
-  // =========================================================
-
-  const togglePermission = (permissionId) => {
-    setSelectedPermissions((previous) => {
-      if (previous.includes(permissionId)) {
-        return previous.filter(
-          (id) => id !== permissionId
+        setError(
+          err?.response?.data?.detail ||
+            err?.response?.data
+              ?.message ||
+            "Failed to load role permissions."
+        );
+      } finally {
+        setPermissionsLoading(
+          false
         );
       }
+    };
 
-      return [
-        ...previous,
-        permissionId,
-      ];
-    });
+
+  // =========================================================
+  // CLOSE PERMISSION MODAL
+  // =========================================================
+
+  const closePermissionModal =
+    () => {
+      if (saving) {
+        return;
+      }
+
+      setShowPermissionModal(
+        false
+      );
+
+      setSelectedRole(null);
+      setSelectedPermissions([]);
+      setPermissionSearch("");
+    };
+
+
+  // =========================================================
+  // ALL PERMISSION IDS
+  // =========================================================
+
+  const allPermissionIds =
+    useMemo(() => {
+      return permissions
+        .map(
+          (permission) =>
+            permission.id
+        )
+        .filter(
+          (id) =>
+            id !== null &&
+            id !== undefined
+        );
+    }, [permissions]);
+
+
+  // =========================================================
+  // CHECK IF ALL PERMISSIONS ARE SELECTED
+  // =========================================================
+
+  const allPermissionsSelected =
+    allPermissionIds.length >
+      0 &&
+    allPermissionIds.every(
+      (id) =>
+        selectedPermissions.includes(
+          id
+        )
+    );
+
+
+  // =========================================================
+  // CHECK IF SOME PERMISSIONS ARE SELECTED
+  // =========================================================
+
+  const somePermissionsSelected =
+    selectedPermissions.length >
+      0 &&
+    !allPermissionsSelected;
+
+
+  // =========================================================
+  // MASTER CHECK ALL / UNCHECK ALL
+  // =========================================================
+
+  const toggleAllPermissions =
+    () => {
+      if (
+        allPermissionsSelected
+      ) {
+        setSelectedPermissions(
+          []
+        );
+      } else {
+        setSelectedPermissions(
+          allPermissionIds
+        );
+      }
+    };
+
+
+  // =========================================================
+  // MASTER CHECKBOX INDETERMINATE
+  // =========================================================
+
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate =
+        somePermissionsSelected;
+    }
+  }, [
+    somePermissionsSelected,
+  ]);
+
+
+  // =========================================================
+  // INDIVIDUAL PERMISSION
+  // =========================================================
+
+  const togglePermission = (
+    permissionId
+  ) => {
+    setSelectedPermissions(
+      (previous) => {
+        if (
+          previous.includes(
+            permissionId
+          )
+        ) {
+          return previous.filter(
+            (id) =>
+              id !== permissionId
+          );
+        }
+
+        return [
+          ...previous,
+          permissionId,
+        ];
+      }
+    );
   };
+
 
   // =========================================================
   // GROUP PERMISSIONS
   // =========================================================
 
-  const groupedPermissions = useMemo(() => {
-    const groups = {};
+  const groupedPermissions =
+    useMemo(() => {
+      const groups = {};
 
-    permissions.forEach((permission) => {
-      const moduleName =
-        permission.module ||
-        permission.module_name ||
-        "Other";
+      permissions.forEach(
+        (permission) => {
+          const moduleName =
+            permission.module ||
+            permission.module_name ||
+            "Other";
 
-      if (!groups[moduleName]) {
-        groups[moduleName] = [];
+          if (!groups[moduleName]) {
+            groups[moduleName] =
+              [];
+          }
+
+          groups[
+            moduleName
+          ].push(permission);
+        }
+      );
+
+      return groups;
+    }, [permissions]);
+
+
+  // =========================================================
+  // FILTER PERMISSIONS
+  // =========================================================
+
+  const filteredGroupedPermissions =
+    useMemo(() => {
+      const searchText =
+        permissionSearch
+          .toLowerCase()
+          .trim();
+
+      if (!searchText) {
+        return groupedPermissions;
       }
 
-      groups[moduleName].push(permission);
-    });
+      const filtered = {};
 
-    return groups;
-  }, [permissions]);
+      Object.entries(
+        groupedPermissions
+      ).forEach(
+        ([
+          moduleName,
+          modulePermissions,
+        ]) => {
+          const matches =
+            modulePermissions.filter(
+              (permission) => {
+                const name =
+                  permission.name ||
+                  "";
+
+                const code =
+                  permission.code ||
+                  permission.codename ||
+                  "";
+
+                const description =
+                  permission.description ||
+                  "";
+
+                return (
+                  moduleName
+                    .toLowerCase()
+                    .includes(
+                      searchText
+                    ) ||
+                  name
+                    .toLowerCase()
+                    .includes(
+                      searchText
+                    ) ||
+                  code
+                    .toLowerCase()
+                    .includes(
+                      searchText
+                    ) ||
+                  description
+                    .toLowerCase()
+                    .includes(
+                      searchText
+                    )
+                );
+              }
+            );
+
+          if (matches.length > 0) {
+            filtered[moduleName] =
+              matches;
+          }
+        }
+      );
+
+      return filtered;
+    }, [
+      groupedPermissions,
+      permissionSearch,
+    ]);
+
 
   // =========================================================
-  // SELECT / DESELECT MODULE
+  // MODULE STATE
   // =========================================================
 
-  const toggleModulePermissions = (
+  const getModuleState = (
     modulePermissions
   ) => {
-    const ids = modulePermissions
-      .map((permission) => permission.id)
-      .filter(Boolean);
-
-    const allSelected = ids.every((id) =>
-      selectedPermissions.includes(id)
-    );
-
-    if (allSelected) {
-      setSelectedPermissions((previous) =>
-        previous.filter(
-          (id) => !ids.includes(id)
+    const ids =
+      modulePermissions
+        .map(
+          (permission) =>
+            permission.id
         )
-      );
-    } else {
-      setSelectedPermissions((previous) => [
-        ...new Set([
-          ...previous,
-          ...ids,
-        ]),
-      ]);
-    }
+        .filter(
+          (id) =>
+            id !== null &&
+            id !== undefined
+        );
+
+    const selectedCount =
+      ids.filter((id) =>
+        selectedPermissions.includes(
+          id
+        )
+      ).length;
+
+    return {
+      ids,
+      selectedCount,
+      allSelected:
+        ids.length > 0 &&
+        selectedCount ===
+          ids.length,
+      someSelected:
+        selectedCount > 0 &&
+        selectedCount <
+          ids.length,
+    };
   };
+
+
+  // =========================================================
+  // MODULE CHECK ALL / UNCHECK ALL
+  // =========================================================
+
+  const toggleModulePermissions =
+    (modulePermissions) => {
+      const ids =
+        modulePermissions
+          .map(
+            (permission) =>
+              permission.id
+          )
+          .filter(
+            (id) =>
+              id !== null &&
+              id !== undefined
+          );
+
+      const allSelected =
+        ids.length > 0 &&
+        ids.every((id) =>
+          selectedPermissions.includes(
+            id
+          )
+        );
+
+      if (allSelected) {
+        setSelectedPermissions(
+          (previous) =>
+            previous.filter(
+              (id) =>
+                !ids.includes(id)
+            )
+        );
+      } else {
+        setSelectedPermissions(
+          (previous) => [
+            ...new Set([
+              ...previous,
+              ...ids,
+            ]),
+          ]
+        );
+      }
+    };
+
 
   // =========================================================
   // SAVE PERMISSIONS
   // =========================================================
 
-  const handleSavePermissions = async () => {
-    if (!selectedRole) return;
+  const handleSavePermissions =
+    async () => {
+      if (!selectedRole) {
+        return;
+      }
 
-    try {
-      setSaving(true);
-      setError("");
-      setSuccess("");
+      try {
+        setSaving(true);
+        clearMessages();
 
-      await roleApi.assignPermissions(
-        selectedRole.id,
-        selectedPermissions
-      );
+        await roleApi.assignPermissions(
+          selectedRole.id,
+          selectedPermissions
+        );
 
-      setSuccess(
-        `Permissions updated for "${selectedRole.name}".`
-      );
+        setSuccess(
+          `Permissions updated for "${selectedRole.name}".`
+        );
 
-      closePermissionModal();
+        setShowPermissionModal(
+          false
+        );
 
-      await loadRoles();
+        setSelectedRole(null);
+        setSelectedPermissions([]);
 
-      setTimeout(() => {
-        setSuccess("");
-      }, 3000);
-    } catch (err) {
-      console.error(
-        "Failed to assign permissions:",
-        err
-      );
+        await loadRoles();
 
-      setError(
-        err?.response?.data?.detail ||
-          err?.response?.data?.message ||
-          "Failed to update permissions."
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
+        setTimeout(() => {
+          setSuccess("");
+        }, 3000);
+      } catch (err) {
+        console.error(
+          "Failed to assign permissions:",
+          err
+        );
+
+        setError(
+          err?.response?.data?.detail ||
+            err?.response?.data
+              ?.message ||
+            "Failed to update permissions."
+        );
+      } finally {
+        setSaving(false);
+      }
+    };
+
 
   // =========================================================
   // RENDER
@@ -634,37 +1081,55 @@ const Roles = () => {
       {/* =====================================================
           HEADER
       ===================================================== */}
+
       <div className="d-flex justify-content-between align-items-center mb-4">
+
         <div>
           <h2 className="mb-1">
             <FaShieldAlt className="me-2" />
+
             Roles & Permissions
           </h2>
 
           <p className="text-muted mb-0">
-            Manage system roles and control user access.
+            Manage system roles and control
+            user access.
           </p>
         </div>
 
         <div className="d-flex gap-2">
+
           <Button
             variant="outline-secondary"
-            onClick={loadRoles}
-            disabled={loading}
+            onClick={() => {
+              loadRoles();
+              loadPermissions();
+            }}
+            disabled={
+              loading ||
+              permissionsLoading
+            }
           >
             <FaSyncAlt className="me-2" />
+
             Refresh
           </Button>
 
           <Button
             variant="primary"
-            onClick={openCreateModal}
+            onClick={
+              openCreateModal
+            }
           >
             <FaPlus className="me-2" />
+
             Add Role
           </Button>
+
         </div>
+
       </div>
+
 
       {/* =====================================================
           ALERTS
@@ -674,7 +1139,9 @@ const Roles = () => {
         <Alert
           variant="danger"
           dismissible
-          onClose={() => setError("")}
+          onClose={() =>
+            setError("")
+          }
         >
           {error}
         </Alert>
@@ -684,11 +1151,14 @@ const Roles = () => {
         <Alert
           variant="success"
           dismissible
-          onClose={() => setSuccess("")}
+          onClose={() =>
+            setSuccess("")
+          }
         >
           {success}
         </Alert>
       )}
+
 
       {/* =====================================================
           STATISTICS
@@ -699,7 +1169,9 @@ const Roles = () => {
         <Col md={4}>
           <Card className="border-0 shadow-sm h-100">
             <Card.Body>
+
               <div className="d-flex justify-content-between align-items-center">
+
                 <div>
                   <small className="text-muted">
                     TOTAL ROLES
@@ -713,15 +1185,20 @@ const Roles = () => {
                 <div className="fs-2 text-primary">
                   <FaShieldAlt />
                 </div>
+
               </div>
+
             </Card.Body>
           </Card>
         </Col>
 
+
         <Col md={4}>
           <Card className="border-0 shadow-sm h-100">
             <Card.Body>
+
               <div className="d-flex justify-content-between align-items-center">
+
                 <div>
                   <small className="text-muted">
                     ACTIVE ROLES
@@ -735,15 +1212,20 @@ const Roles = () => {
                 <div className="fs-2 text-success">
                   <FaCheckCircle />
                 </div>
+
               </div>
+
             </Card.Body>
           </Card>
         </Col>
 
+
         <Col md={4}>
           <Card className="border-0 shadow-sm h-100">
             <Card.Body>
+
               <div className="d-flex justify-content-between align-items-center">
+
                 <div>
                   <small className="text-muted">
                     INACTIVE ROLES
@@ -757,24 +1239,30 @@ const Roles = () => {
                 <div className="fs-2 text-secondary">
                   <FaTimesCircle />
                 </div>
+
               </div>
+
             </Card.Body>
           </Card>
         </Col>
 
       </Row>
 
+
       {/* =====================================================
           FILTERS
       ===================================================== */}
 
       <Card className="border-0 shadow-sm mb-4">
+
         <Card.Body>
 
           <Row className="g-3">
 
             <Col md={8}>
+
               <InputGroup>
+
                 <InputGroup.Text>
                   <FaSearch />
                 </InputGroup.Text>
@@ -784,19 +1272,28 @@ const Roles = () => {
                   placeholder="Search roles..."
                   value={search}
                   onChange={(e) =>
-                    setSearch(e.target.value)
+                    setSearch(
+                      e.target.value
+                    )
                   }
                 />
+
               </InputGroup>
+
             </Col>
 
+
             <Col md={4}>
+
               <Form.Select
                 value={statusFilter}
                 onChange={(e) =>
-                  setStatusFilter(e.target.value)
+                  setStatusFilter(
+                    e.target.value
+                  )
                 }
               >
+
                 <option value="all">
                   All Status
                 </option>
@@ -808,13 +1305,17 @@ const Roles = () => {
                 <option value="inactive">
                   Inactive
                 </option>
+
               </Form.Select>
+
             </Col>
 
           </Row>
 
         </Card.Body>
+
       </Card>
+
 
       {/* =====================================================
           ROLES TABLE
@@ -823,39 +1324,43 @@ const Roles = () => {
       <Card className="border-0 shadow-sm">
 
         <Card.Header className="bg-white py-3">
-          <div className="d-flex justify-content-between align-items-center">
 
-            <div>
-              <strong>
-                System Roles
-              </strong>
+          <strong>
+            System Roles
+          </strong>
 
-              <div className="text-muted small">
-                {filteredRoles.length} role
-                {filteredRoles.length !== 1
-                  ? "s"
-                  : ""}
-              </div>
-            </div>
-
+          <div className="text-muted small">
+            {filteredRoles.length} role
+            {filteredRoles.length !== 1
+              ? "s"
+              : ""}
           </div>
+
         </Card.Header>
+
 
         <Card.Body className="p-0">
 
           {loading ? (
+
             <div className="text-center py-5">
+
               <Spinner animation="border" />
+
               <div className="text-muted mt-2">
                 Loading roles...
               </div>
+
             </div>
-          ) : filteredRoles.length === 0 ? (
+
+          ) : filteredRoles.length ===
+            0 ? (
+
             <div className="text-center py-5">
 
               <FaShieldAlt
-                className="text-muted mb-3"
                 size={45}
+                className="text-muted mb-3"
               />
 
               <h5>
@@ -863,20 +1368,25 @@ const Roles = () => {
               </h5>
 
               <p className="text-muted">
-                Create a role to start managing
-                user access.
+                Create a role to start
+                managing user access.
               </p>
 
               <Button
                 variant="primary"
-                onClick={openCreateModal}
+                onClick={
+                  openCreateModal
+                }
               >
                 <FaPlus className="me-2" />
+
                 Create Role
               </Button>
 
             </div>
+
           ) : (
+
             <div className="table-responsive">
 
               <Table
@@ -885,188 +1395,255 @@ const Roles = () => {
               >
 
                 <thead className="table-light">
+
                   <tr>
-                    <th>Role</th>
-                    <th>Code</th>
-                    <th>Description</th>
+
+                    <th>
+                      Role
+                    </th>
+
+                    <th>
+                      Code
+                    </th>
+
+                    <th>
+                      Description
+                    </th>
+
                     <th className="text-center">
                       Users
                     </th>
+
                     <th className="text-center">
                       Permissions
                     </th>
-                    <th>Status</th>
+
+                    <th>
+                      Status
+                    </th>
+
                     <th className="text-end">
                       Actions
                     </th>
+
                   </tr>
+
                 </thead>
+
 
                 <tbody>
 
-                  {filteredRoles.map((role) => {
+                  {filteredRoles.map(
+                    (role) => {
 
-                    const isActive =
-                      role.is_active !== false &&
-                      role.is_active !== 0;
+                      const isActive =
+                        role.is_active !==
+                          false &&
+                        role.is_active !==
+                          0;
 
-                    const permissionCount =
-                      role.permission_count ??
-                      role.permissions_count ??
-                      role.permissions?.length ??
-                      0;
+                      const permissionCount =
+                        role.permission_count ??
+                        role.permissions_count ??
+                        role.permissions
+                          ?.length ??
+                        0;
 
-                    const userCount =
-                      role.user_count ??
-                      role.users_count ??
-                      role.users?.length ??
-                      0;
+                      const userCount =
+                        role.user_count ??
+                        role.users_count ??
+                        role.users
+                          ?.length ??
+                        0;
 
-                    return (
-                      <tr key={role.id}>
+                      return (
 
-                        <td>
-                          <div className="d-flex align-items-center">
+                        <tr
+                          key={role.id}
+                        >
 
-                            <div
-                              className="bg-light rounded-circle d-flex align-items-center justify-content-center me-3"
-                              style={{
-                                width: 40,
-                                height: 40,
-                              }}
-                            >
-                              <FaShieldAlt />
-                            </div>
+                          <td>
 
-                            <div>
+                            <div className="d-flex align-items-center">
+
+                              <div
+                                className="bg-light rounded-circle d-flex align-items-center justify-content-center me-3"
+                                style={{
+                                  width: 40,
+                                  height: 40,
+                                }}
+                              >
+                                <FaShieldAlt />
+                              </div>
+
                               <strong>
                                 {role.name}
                               </strong>
+
                             </div>
 
-                          </div>
-                        </td>
+                          </td>
 
-                        <td>
-                          <code>
-                            {role.code}
-                          </code>
-                        </td>
 
-                        <td>
-                          <span className="text-muted">
-                            {role.description ||
-                              "No description"}
-                          </span>
-                        </td>
+                          <td>
+                            <code>
+                              {role.code}
+                            </code>
+                          </td>
 
-                        <td className="text-center">
-                          <Badge bg="light" text="dark">
-                            <FaUsers className="me-1" />
-                            {userCount}
-                          </Badge>
-                        </td>
 
-                        <td className="text-center">
-                          <Badge bg="light" text="dark">
-                            <FaKey className="me-1" />
-                            {permissionCount}
-                          </Badge>
-                        </td>
+                          <td>
+                            <span className="text-muted">
+                              {role.description ||
+                                "No description"}
+                            </span>
+                          </td>
 
-                        <td>
-                          {isActive ? (
-                            <Badge bg="success">
-                              <FaCheckCircle className="me-1" />
-                              Active
+
+                          <td className="text-center">
+
+                            <Badge
+                              bg="light"
+                              text="dark"
+                            >
+                              <FaUsers className="me-1" />
+
+                              {userCount}
                             </Badge>
-                          ) : (
-                            <Badge bg="secondary">
-                              <FaTimesCircle className="me-1" />
-                              Inactive
+
+                          </td>
+
+
+                          <td className="text-center">
+
+                            <Badge
+                              bg="light"
+                              text="dark"
+                            >
+                              <FaKey className="me-1" />
+
+                              {permissionCount}
                             </Badge>
-                          )}
-                        </td>
 
-                        <td>
-                          <div className="d-flex justify-content-end gap-1">
+                          </td>
 
-                            <Button
-                              size="sm"
-                              variant="outline-primary"
-                              title="Manage Permissions"
-                              onClick={() =>
-                                openPermissionModal(role)
-                              }
-                            >
-                              <FaKey />
-                            </Button>
 
-                            <Button
-                              size="sm"
-                              variant="outline-secondary"
-                              title="Edit Role"
-                              onClick={() =>
-                                openEditModal(role)
-                              }
-                            >
-                              <FaEdit />
-                            </Button>
+                          <td>
 
-                            <Button
-                              size="sm"
-                              variant={
-                                isActive
-                                  ? "outline-warning"
-                                  : "outline-success"
-                              }
-                              title={
-                                isActive
-                                  ? "Deactivate"
-                                  : "Activate"
-                              }
-                              onClick={() =>
-                                handleToggleStatus(
-                                  role
-                                )
-                              }
-                            >
-                              {isActive ? (
-                                <FaTimesCircle />
-                              ) : (
-                                <FaCheckCircle />
-                              )}
-                            </Button>
+                            {isActive ? (
 
-                            <Button
-                              size="sm"
-                              variant="outline-danger"
-                              title="Delete Role"
-                              onClick={() =>
-                                handleDeleteRole(
-                                  role
-                                )
-                              }
-                            >
-                              <FaTrash />
-                            </Button>
+                              <Badge bg="success">
+                                <FaCheckCircle className="me-1" />
+                                Active
+                              </Badge>
 
-                          </div>
-                        </td>
+                            ) : (
 
-                      </tr>
-                    );
-                  })}
+                              <Badge bg="secondary">
+                                <FaTimesCircle className="me-1" />
+                                Inactive
+                              </Badge>
+
+                            )}
+
+                          </td>
+
+
+                          <td>
+
+                            <div className="d-flex justify-content-end gap-1">
+
+                              <Button
+                                size="sm"
+                                variant="outline-primary"
+                                title="Manage Permissions"
+                                onClick={() =>
+                                  openPermissionModal(
+                                    role
+                                  )
+                                }
+                              >
+                                <FaKey />
+                              </Button>
+
+
+                              <Button
+                                size="sm"
+                                variant="outline-secondary"
+                                title="Edit Role"
+                                onClick={() =>
+                                  openEditModal(
+                                    role
+                                  )
+                                }
+                              >
+                                <FaEdit />
+                              </Button>
+
+
+                              <Button
+                                size="sm"
+                                variant={
+                                  isActive
+                                    ? "outline-warning"
+                                    : "outline-success"
+                                }
+                                title={
+                                  isActive
+                                    ? "Deactivate"
+                                    : "Activate"
+                                }
+                                onClick={() =>
+                                  handleToggleStatus(
+                                    role
+                                  )
+                                }
+                                disabled={saving}
+                              >
+                                {isActive ? (
+                                  <FaTimesCircle />
+                                ) : (
+                                  <FaCheckCircle />
+                                )}
+                              </Button>
+
+
+                              <Button
+                                size="sm"
+                                variant="outline-danger"
+                                title="Delete Role"
+                                onClick={() =>
+                                  handleDeleteRole(
+                                    role
+                                  )
+                                }
+                                disabled={saving}
+                              >
+                                <FaTrash />
+                              </Button>
+
+                            </div>
+
+                          </td>
+
+                        </tr>
+
+                      );
+                    }
+                  )}
 
                 </tbody>
 
               </Table>
 
             </div>
+
           )}
 
         </Card.Body>
+
       </Card>
+
 
       {/* =====================================================
           CREATE / EDIT ROLE MODAL
@@ -1079,20 +1656,30 @@ const Roles = () => {
       >
 
         <Modal.Header closeButton>
+
           <Modal.Title>
+
             <FaShieldAlt className="me-2" />
 
             {editingRole
               ? "Edit Role"
               : "Create Role"}
+
           </Modal.Title>
+
         </Modal.Header>
 
-        <Form onSubmit={handleRoleSubmit}>
+
+        <Form
+          onSubmit={
+            handleRoleSubmit
+          }
+        >
 
           <Modal.Body>
 
             <Form.Group className="mb-3">
+
               <Form.Label>
                 Role Name
                 <span className="text-danger">
@@ -1111,9 +1698,12 @@ const Roles = () => {
                 }
                 required
               />
+
             </Form.Group>
 
+
             <Form.Group className="mb-3">
+
               <Form.Label>
                 Role Code
                 <span className="text-danger">
@@ -1126,22 +1716,31 @@ const Roles = () => {
                 placeholder="e.g. cashier"
                 value={roleForm.code}
                 onChange={(e) =>
-                  setRoleForm((previous) => ({
-                    ...previous,
-                    code: e.target.value
-                      .toLowerCase()
-                      .replace(/\s+/g, "_"),
-                  }))
+                  setRoleForm(
+                    (previous) => ({
+                      ...previous,
+                      code: e.target.value
+                        .toLowerCase()
+                        .replace(
+                          /\s+/g,
+                          "_"
+                        ),
+                    })
+                  )
                 }
                 required
               />
 
               <Form.Text className="text-muted">
-                Use a unique system-friendly code.
+                Use a unique system-friendly
+                code.
               </Form.Text>
+
             </Form.Group>
 
+
             <Form.Group className="mb-3">
+
               <Form.Label>
                 Description
               </Form.Label>
@@ -1150,65 +1749,88 @@ const Roles = () => {
                 as="textarea"
                 rows={3}
                 placeholder="Describe what this role is responsible for..."
-                value={roleForm.description}
+                value={
+                  roleForm.description
+                }
                 onChange={(e) =>
-                  setRoleForm((previous) => ({
-                    ...previous,
-                    description:
-                      e.target.value,
-                  }))
+                  setRoleForm(
+                    (previous) => ({
+                      ...previous,
+                      description:
+                        e.target.value,
+                    })
+                  )
                 }
               />
+
             </Form.Group>
+
 
             <Form.Check
               type="switch"
               id="role-active"
               label="Active Role"
-              checked={roleForm.is_active}
+              checked={
+                roleForm.is_active
+              }
               onChange={(e) =>
-                setRoleForm((previous) => ({
-                  ...previous,
-                  is_active:
-                    e.target.checked,
-                }))
+                setRoleForm(
+                  (previous) => ({
+                    ...previous,
+                    is_active:
+                      e.target.checked,
+                  })
+                )
               }
             />
 
           </Modal.Body>
 
+
           <Modal.Footer>
 
             <Button
               variant="secondary"
-              onClick={closeRoleModal}
+              onClick={
+                closeRoleModal
+              }
               disabled={saving}
             >
               <FaTimes className="me-2" />
+
               Cancel
             </Button>
+
 
             <Button
               variant="primary"
               type="submit"
               disabled={saving}
             >
+
               {saving ? (
+
                 <>
                   <Spinner
                     size="sm"
                     className="me-2"
                   />
+
                   Saving...
                 </>
+
               ) : (
+
                 <>
                   <FaSave className="me-2" />
+
                   {editingRole
                     ? "Update Role"
                     : "Create Role"}
                 </>
+
               )}
+
             </Button>
 
           </Modal.Footer>
@@ -1217,14 +1839,17 @@ const Roles = () => {
 
       </Modal>
 
+
       {/* =====================================================
-          PERMISSIONS MODAL
+          PERMISSION MODAL
       ===================================================== */}
 
       <Modal
         show={showPermissionModal}
-        onHide={closePermissionModal}
-        size="lg"
+        onHide={
+          closePermissionModal
+        }
+        size="xl"
         centered
         scrollable
       >
@@ -1232,6 +1857,7 @@ const Roles = () => {
         <Modal.Header closeButton>
 
           <Modal.Title>
+
             <FaKey className="me-2" />
 
             Manage Permissions
@@ -1249,249 +1875,494 @@ const Roles = () => {
 
         </Modal.Header>
 
+
         <Modal.Body>
 
           {permissionsLoading ? (
+
             <div className="text-center py-5">
+
               <Spinner animation="border" />
 
               <div className="text-muted mt-2">
                 Loading permissions...
               </div>
-            </div>
-          ) : permissions.length === 0 ? (
-            <Alert variant="warning">
-              No permissions have been configured
-              in the system yet.
-            </Alert>
-          ) : (
-            <div>
 
-              {/* SUMMARY */}
+            </div>
+
+          ) : permissions.length ===
+            0 ? (
+
+            <Alert variant="warning">
+              No permissions have been
+              configured in the system yet.
+            </Alert>
+
+          ) : (
+
+            <>
+
+              {/* =================================================
+                  PERMISSION SEARCH
+              ================================================= */}
+
+              <InputGroup className="mb-3">
+
+                <InputGroup.Text>
+                  <FaSearch />
+                </InputGroup.Text>
+
+                <Form.Control
+                  type="text"
+                  placeholder="Search permissions..."
+                  value={
+                    permissionSearch
+                  }
+                  onChange={(e) =>
+                    setPermissionSearch(
+                      e.target.value
+                    )
+                  }
+                />
+
+                {permissionSearch && (
+                  <Button
+                    variant="outline-secondary"
+                    onClick={() =>
+                      setPermissionSearch(
+                        ""
+                      )
+                    }
+                  >
+                    <FaTimes />
+                  </Button>
+                )}
+
+              </InputGroup>
+
+
+              {/* =================================================
+                  MASTER CHECK ALL
+              ================================================= */}
+
               <Card className="bg-light border-0 mb-3">
+
                 <Card.Body className="py-3">
 
-                  <div className="d-flex justify-content-between align-items-center">
+                  <Row className="align-items-center">
 
-                    <div>
-                      <strong>
-                        Selected Permissions
-                      </strong>
+                    <Col md={8}>
 
-                      <div className="text-muted small">
-                        Choose what this role can
-                        access.
-                      </div>
-                    </div>
+                      <div className="d-flex align-items-center">
 
-                    <Badge bg="primary" pill>
-                      {selectedPermissions.length}
-                      {" / "}
-                      {permissions.length}
-                    </Badge>
+                        <Form.Check
+                          type="checkbox"
+                          id="select-all-permissions"
+                          ref={
+                            selectAllRef
+                          }
+                          checked={
+                            allPermissionsSelected
+                          }
+                          onChange={
+                            toggleAllPermissions
+                          }
+                          className="me-2"
+                        />
 
-                  </div>
+                        <div>
 
-                </Card.Body>
-              </Card>
+                          <div className="fw-semibold">
 
-              {/* PERMISSION GROUPS */}
+                            {allPermissionsSelected
+                              ? "Uncheck All Permissions"
+                              : "Check All Permissions"}
 
-              {Object.entries(
-                groupedPermissions
-              ).map(
-                ([
-                  moduleName,
-                  modulePermissions,
-                ]) => {
-
-                  const moduleIds =
-                    modulePermissions
-                      .map(
-                        (permission) =>
-                          permission.id
-                      )
-                      .filter(Boolean);
-
-                  const selectedCount =
-                    moduleIds.filter(
-                      (id) =>
-                        selectedPermissions.includes(
-                          id
-                        )
-                    ).length;
-
-                  const allSelected =
-                    moduleIds.length > 0 &&
-                    selectedCount ===
-                      moduleIds.length;
-
-                  return (
-                    <Card
-                      key={moduleName}
-                      className="mb-3"
-                    >
-
-                      <Card.Header className="bg-white">
-
-                        <div className="d-flex justify-content-between align-items-center">
-
-                          <div>
-                            <strong>
-                              {moduleName}
-                            </strong>
-
-                            <span className="text-muted ms-2">
-                              ({selectedCount}/
-                              {moduleIds.length})
-                            </span>
                           </div>
 
-                          <Form.Check
-                            type="checkbox"
-                            label={
-                              allSelected
-                                ? "Deselect All"
-                                : "Select All"
-                            }
-                            checked={
-                              allSelected
-                            }
-                            onChange={() =>
-                              toggleModulePermissions(
-                                modulePermissions
-                              )
-                            }
-                          />
+                          <div className="text-muted small">
+
+                            Select or remove all
+                            permissions for this role.
+
+                          </div>
 
                         </div>
 
-                      </Card.Header>
+                      </div>
 
-                      <Card.Body>
+                    </Col>
 
-                        <Row>
 
-                          {modulePermissions.map(
-                            (permission) => {
+                    <Col
+                      md={4}
+                      className="text-md-end mt-3 mt-md-0"
+                    >
 
-                              const checked =
-                                selectedPermissions.includes(
-                                  permission.id
-                                );
+                      <Badge
+                        bg={
+                          allPermissionsSelected
+                            ? "success"
+                            : "primary"
+                        }
+                        pill
+                        className="px-3 py-2"
+                      >
 
-                              return (
-                                <Col
-                                  md={6}
-                                  key={
+                        {selectedPermissions.length}
+                        {" / "}
+                        {allPermissionIds.length}
+                        {" Selected"}
+
+                      </Badge>
+
+                    </Col>
+
+                  </Row>
+
+                </Card.Body>
+
+              </Card>
+
+
+              {/* =================================================
+                  CLEAR ALL
+              ================================================= */}
+
+              <div className="d-flex justify-content-between align-items-center mb-3">
+
+                <span className="text-muted small">
+
+                  {Object.values(
+                    filteredGroupedPermissions
+                  ).reduce(
+                    (
+                      total,
+                      group
+                    ) =>
+                      total +
+                      group.length,
+                    0
+                  )}{" "}
+                  permissions displayed
+
+                </span>
+
+
+                {selectedPermissions.length >
+                  0 && (
+
+                  <Button
+                    size="sm"
+                    variant="outline-danger"
+                    onClick={() =>
+                      setSelectedPermissions(
+                        []
+                      )
+                    }
+                  >
+
+                    <FaTimes className="me-1" />
+
+                    Clear All
+
+                  </Button>
+
+                )}
+
+              </div>
+
+
+              {/* =================================================
+                  PERMISSION GROUPS
+              ================================================= */}
+
+              {Object.keys(
+                filteredGroupedPermissions
+              ).length === 0 ? (
+
+                <div className="text-center py-5 text-muted">
+
+                  <FaKey
+                    size={35}
+                    className="mb-2"
+                  />
+
+                  <div>
+                    No permissions found.
+                  </div>
+
+                </div>
+
+              ) : (
+
+                Object.entries(
+                  filteredGroupedPermissions
+                ).map(
+                  ([
+                    moduleName,
+                    modulePermissions,
+                  ]) => {
+
+                    const moduleState =
+                      getModuleState(
+                        modulePermissions
+                      );
+
+                    return (
+
+                      <Card
+                        key={moduleName}
+                        className="mb-3"
+                      >
+
+                        {/* =======================================
+                            MODULE HEADER
+                        ======================================= */}
+
+                        <Card.Header className="bg-white">
+
+                          <div className="d-flex justify-content-between align-items-center">
+
+                            <div>
+
+                              <strong>
+                                {moduleName}
+                              </strong>
+
+                              <span className="text-muted ms-2">
+
+                                (
+                                {
+                                  moduleState.selectedCount
+                                }
+                                /
+                                {
+                                  moduleState.ids.length
+                                }
+                                )
+
+                              </span>
+
+                            </div>
+
+
+                            <Form.Check
+                              type="checkbox"
+                              id={`module-${moduleName}`}
+                              checked={
+                                moduleState.allSelected
+                              }
+                              onChange={() =>
+                                toggleModulePermissions(
+                                  modulePermissions
+                                )
+                              }
+                              ref={(element) => {
+                                if (element) {
+                                  element.indeterminate =
+                                    moduleState.someSelected;
+                                }
+                              }}
+                              label={
+                                moduleState.allSelected
+                                  ? "Deselect All"
+                                  : "Select All"
+                              }
+                            />
+
+                          </div>
+
+                        </Card.Header>
+
+
+                        {/* =======================================
+                            PERMISSION LIST
+                        ======================================= */}
+
+                        <Card.Body>
+
+                          <Row>
+
+                            {modulePermissions.map(
+                              (
+                                permission
+                              ) => {
+
+                                const checked =
+                                  selectedPermissions.includes(
                                     permission.id
-                                  }
-                                  className="mb-3"
-                                >
+                                  );
 
-                                  <div
-                                    className={`border rounded p-3 ${
-                                      checked
-                                        ? "border-primary bg-light"
-                                        : ""
-                                    }`}
+                                const permissionName =
+                                  permission.name ||
+                                  permission.permission_name ||
+                                  permission.codename ||
+                                  permission.code ||
+                                  "Unnamed Permission";
+
+                                const permissionCode =
+                                  permission.code ||
+                                  permission.codename ||
+                                  "";
+
+                                return (
+
+                                  <Col
+                                    md={6}
+                                    lg={4}
+                                    key={
+                                      permission.id
+                                    }
+                                    className="mb-3"
                                   >
 
-                                    <Form.Check
-                                      type="checkbox"
-                                      id={`permission-${permission.id}`}
-                                      checked={
+                                    <div
+                                      className={`border rounded p-3 h-100 ${
                                         checked
-                                      }
-                                      onChange={() =>
-                                        togglePermission(
-                                          permission.id
-                                        )
-                                      }
-                                      label={
-                                        <div>
-                                          <strong>
-                                            {
-                                              permission.name
-                                            }
-                                          </strong>
+                                          ? "border-primary bg-light"
+                                          : ""
+                                      }`}
+                                    >
 
-                                          {permission.code && (
-                                            <div>
-                                              <code className="small">
-                                                {
-                                                  permission.code
-                                                }
-                                              </code>
-                                            </div>
-                                          )}
+                                      <Form.Check
+                                        type="checkbox"
+                                        id={`permission-${permission.id}`}
+                                        checked={
+                                          checked
+                                        }
+                                        onChange={() =>
+                                          togglePermission(
+                                            permission.id
+                                          )
+                                        }
+                                        label={
+                                          <div>
 
-                                          {permission.description && (
-                                            <div className="text-muted small mt-1">
+                                            <div className="fw-semibold">
                                               {
-                                                permission.description
+                                                permissionName
                                               }
                                             </div>
-                                          )}
-                                        </div>
-                                      }
-                                    />
 
-                                  </div>
+                                            {permissionCode && (
+                                              <div>
+                                                <code className="small">
+                                                  {
+                                                    permissionCode
+                                                  }
+                                                </code>
+                                              </div>
+                                            )}
 
-                                </Col>
-                              );
-                            }
-                          )}
+                                            {permission.description && (
+                                              <div className="text-muted small mt-1">
+                                                {
+                                                  permission.description
+                                                }
+                                              </div>
+                                            )}
 
-                        </Row>
+                                          </div>
+                                        }
+                                      />
 
-                      </Card.Body>
+                                    </div>
 
-                    </Card>
-                  );
-                }
+                                  </Col>
+
+                                );
+                              }
+                            )}
+
+                          </Row>
+
+                        </Card.Body>
+
+                      </Card>
+
+                    );
+                  }
+                )
+
               )}
 
-            </div>
+            </>
+
           )}
 
         </Modal.Body>
 
+
+        {/* =====================================================
+            PERMISSION FOOTER
+        ===================================================== */}
+
         <Modal.Footer>
+
+          <div className="me-auto">
+
+            <strong>
+              {
+                selectedPermissions.length
+              }
+            </strong>
+
+            <span className="text-muted">
+              {" "}of{" "}
+              {allPermissionIds.length}
+              {" "}permissions selected
+            </span>
+
+          </div>
+
 
           <Button
             variant="secondary"
-            onClick={closePermissionModal}
+            onClick={
+              closePermissionModal
+            }
             disabled={saving}
           >
             <FaTimes className="me-2" />
+
             Cancel
           </Button>
 
+
           <Button
             variant="primary"
-            onClick={handleSavePermissions}
+            onClick={
+              handleSavePermissions
+            }
             disabled={
               saving ||
               permissionsLoading ||
               !selectedRole
             }
           >
+
             {saving ? (
+
               <>
                 <Spinner
                   size="sm"
                   className="me-2"
                 />
+
                 Saving...
               </>
+
             ) : (
+
               <>
                 <FaSave className="me-2" />
+
                 Save Permissions
               </>
+
             )}
+
           </Button>
 
         </Modal.Footer>
@@ -1501,5 +2372,6 @@ const Roles = () => {
     </div>
   );
 };
+
 
 export default Roles;
