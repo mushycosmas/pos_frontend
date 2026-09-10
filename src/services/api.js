@@ -1,3 +1,4 @@
+
 import axios from "axios";
 
 // =========================================================
@@ -26,8 +27,7 @@ api.interceptors.request.use(
     if (accessToken) {
       config.headers = config.headers || {};
 
-      config.headers.Authorization =
-        `Bearer ${accessToken}`;
+      config.headers.Authorization = `Bearer ${accessToken}`;
     }
 
     return config;
@@ -43,17 +43,36 @@ api.interceptors.request.use(
 // Handle authentication errors
 // =========================================================
 
+let isLoggingOut = false;
+
 api.interceptors.response.use(
   (response) => {
     return response;
   },
 
   (error) => {
-    if (error.response?.status === 401) {
-      console.error(
-        "Authentication failed:",
-        error.response?.data
-      );
+    const status = error.response?.status;
+
+    // =======================================================
+    // SESSION EXPIRED / UNAUTHORIZED
+    // =======================================================
+
+    if (status === 401 && !isLoggingOut) {
+      isLoggingOut = true;
+
+      console.warn("Session expired. Logging out...");
+
+      // Remove authentication data
+      localStorage.removeItem("access_token");
+      localStorage.removeItem("refresh_token");
+      localStorage.removeItem("user");
+
+      sessionStorage.removeItem("access_token");
+      sessionStorage.removeItem("refresh_token");
+      sessionStorage.removeItem("user");
+
+      // Redirect to login
+      window.location.href = "/login";
     }
 
     return Promise.reject(error);

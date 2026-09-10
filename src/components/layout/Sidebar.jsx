@@ -14,7 +14,7 @@ const Sidebar = () => {
   //
   // IMPORTANT:
   // This only controls the FRONTEND UI.
-  // The Django backend MUST also enforce the same permissions.
+  // Django backend MUST also enforce the same permissions.
   //
   const menuItems = [
     // ==========================================================
@@ -33,7 +33,7 @@ const Sidebar = () => {
           name: 'POS / Sales',
           icon: 'bi-cart3',
           path: '/pos',
-          permission: 'sales.create_sale',
+          permission: 'sales.view_sale',
         },
       ],
     },
@@ -87,7 +87,7 @@ const Sidebar = () => {
           name: 'Categories',
           icon: 'bi-tags',
           path: '/categories',
-          permission: 'categories.view_category',
+          permission: 'products.view_category',
         },
         {
           name: 'Brands',
@@ -111,7 +111,13 @@ const Sidebar = () => {
           name: 'Stock Adjustments',
           icon: 'bi-sliders',
           path: '/stock-adjustments',
-          permission: 'inventory.adjust_stock',
+          permission: 'inventory.change_stock',
+        },
+        {
+          name: 'Stock Movements',
+          icon: 'bi-arrow-left-right',
+          path: '/stock-movements',
+          permission: 'inventory.view_stockmovement',
         },
       ],
     },
@@ -186,25 +192,27 @@ const Sidebar = () => {
           name: 'Users',
           icon: 'bi-people-fill',
           path: '/users',
-          // permission: 'users.view_user',
+          // Remove the comment if this permission exists:
+          permission: 'accounts.view_user',
         },
         {
           name: 'Roles & Permissions',
           icon: 'bi-shield-lock',
           path: '/roles',
-          // permission: 'roles.view_role',
+          // Remove the comment if this permission exists:
+          permission: 'roles.view_role',
         },
         {
           name: 'Payment Methods',
           icon: 'bi-credit-card-2-front',
           path: '/payment-methods',
-          permission: 'payments.view_payment_method',
+          permission: 'payments.view_paymentmethod',
         },
         {
           name: 'Settings',
           icon: 'bi-gear',
-          permission: 'settings.view_setting',
           path: '/settings',
+          permission: 'settings.view_setting',
         },
       ],
     },
@@ -213,10 +221,11 @@ const Sidebar = () => {
   // ============================================================
   // FILTER MENU BY PERMISSION
   // ============================================================
+
   const visibleMenuGroups = menuItems
     .map((group) => {
       const visibleItems = group.items.filter((item) => {
-        // If no permission is specified, show the item.
+        // No permission means everyone can see the item.
         if (!item.permission) {
           return true;
         }
@@ -229,8 +238,12 @@ const Sidebar = () => {
         items: visibleItems,
       };
     })
-    // Remove sections that have no visible menu items
+    // Remove empty sections
     .filter((group) => group.items.length > 0);
+
+  // ============================================================
+  // RENDER
+  // ============================================================
 
   return (
     <aside className="sidebar">
@@ -239,7 +252,6 @@ const Sidebar = () => {
           BRAND
       ====================================================== */}
       <div className="brand">
-
         <div className="brand-icon">
           <i className="bi bi-shop"></i>
         </div>
@@ -253,7 +265,6 @@ const Sidebar = () => {
             Retail Management
           </small>
         </div>
-
       </div>
 
       {/* ======================================================
@@ -262,7 +273,6 @@ const Sidebar = () => {
       <div className="sidebar-menu">
 
         {visibleMenuGroups.map((group) => (
-
           <div
             className="menu-group"
             key={group.section}
@@ -275,7 +285,6 @@ const Sidebar = () => {
 
             {/* MENU ITEMS */}
             {group.items.map((item) => (
-
               <NavLink
                 key={item.name}
                 to={item.path}
@@ -283,21 +292,15 @@ const Sidebar = () => {
                   `menu-item ${isActive ? 'active' : ''}`
                 }
               >
-
-                <i
-                  className={`bi ${item.icon}`}
-                ></i>
+                <i className={`bi ${item.icon}`}></i>
 
                 <span>
                   {item.name}
                 </span>
-
               </NavLink>
-
             ))}
 
           </div>
-
         ))}
 
       </div>
@@ -312,7 +315,6 @@ const Sidebar = () => {
           <span className="status-dot"></span>
 
           <div>
-
             <strong>
               Store Online
             </strong>
@@ -320,7 +322,6 @@ const Sidebar = () => {
             <small>
               System operational
             </small>
-
           </div>
 
         </div>

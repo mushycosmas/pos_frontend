@@ -94,35 +94,23 @@ const getInvoiceNumber = (sale) => {
 };
 
 const getCustomerName = (sale) => {
-  if (
-    sale?.customer_name &&
-    typeof sale.customer_name === "string"
-  ) {
-    return sale.customer_name;
-  }
+  return (
+    sale?.customer_display_name ??
+    sale?.customer_name ??
+    sale?.customerName ??
+    sale?.customer?.name ??
+    sale?.customer?.full_name ??
+    "Walk-in Customer"
+  );
+};
 
-  if (
-    sale?.customerName &&
-    typeof sale.customerName === "string"
-  ) {
-    return sale.customerName;
-  }
-
-  if (
-    sale?.customer?.name &&
-    typeof sale.customer.name === "string"
-  ) {
-    return sale.customer.name;
-  }
-
-  if (
-    sale?.customer?.full_name &&
-    typeof sale.customer.full_name === "string"
-  ) {
-    return sale.customer.full_name;
-  }
-
-  return "Walk-in Customer";
+const getCustomerPhone = (sale) => {
+  return (
+    sale?.customer_display_phone ??
+    sale?.customer_phone ??
+    sale?.customer?.phone ??
+    null
+  );
 };
 
 const getBranchName = (sale) => {
@@ -133,10 +121,6 @@ const getBranchName = (sale) => {
     "-"
   );
 };
-
-// =========================================================
-// SOLD BY
-// =========================================================
 
 const getSoldBy = (sale) => {
   return (
@@ -165,30 +149,127 @@ const getStatus = (sale) => {
 };
 
 const getPaymentStatus = (sale) => {
-  return (
+  const explicitStatus =
     sale?.payment_status ??
-    sale?.paymentStatus ??
-    "-"
+    sale?.paymentStatus;
+
+  if (explicitStatus) {
+    return explicitStatus;
+  }
+
+  const total = Number(
+    sale?.total ??
+    sale?.grand_total ??
+    sale?.grandTotal ??
+    sale?.total_amount ??
+    sale?.totalAmount ??
+    0
   );
+
+  const amountPaid = Number(
+    sale?.amount_paid ??
+    sale?.amountPaid ??
+    0
+  );
+
+  if (total > 0 && amountPaid >= total) {
+    return "PAID";
+  }
+
+  if (amountPaid > 0 && amountPaid < total) {
+    return "PARTIAL";
+  }
+
+  if (total > 0 && amountPaid <= 0) {
+    return "UNPAID";
+  }
+
+  return "-";
 };
 
 const getPaymentMethod = (sale) => {
   return (
-    sale?.payment_method ??
-    sale?.paymentMethod ??
+    sale?.payment_method_name ??
+    sale?.paymentMethodName ??
+    sale?.payment_method?.name ??
+    sale?.paymentMethod?.name ??
+    sale?.payment?.method_name ??
     sale?.payment?.method ??
+    sale?.payment_method_code ??
     "-"
+  );
+};
+
+const getPaymentPhone = (sale) => {
+  return (
+    sale?.payment_phone ??
+    sale?.paymentPhone ??
+    null
+  );
+};
+
+const getTransactionReference = (sale) => {
+  return (
+    sale?.transaction_reference ??
+    sale?.transactionReference ??
+    null
   );
 };
 
 const getTotal = (sale) => {
   return Number(
+    sale?.total ??
     sale?.grand_total ??
-      sale?.grandTotal ??
-      sale?.total_amount ??
-      sale?.totalAmount ??
-      sale?.total ??
-      0
+    sale?.grandTotal ??
+    sale?.total_amount ??
+    sale?.totalAmount ??
+    0
+  );
+};
+
+const getSubtotal = (sale) => {
+  return Number(
+    sale?.subtotal ??
+    sale?.sub_total ??
+    0
+  );
+};
+
+const getDiscount = (sale) => {
+  return Number(
+    sale?.discount ??
+    sale?.discount_amount ??
+    0
+  );
+};
+
+const getTaxAmount = (sale) => {
+  return Number(
+    sale?.tax_amount ??
+    sale?.tax ??
+    0
+  );
+};
+
+const getTaxRate = (sale) => {
+  return Number(
+    sale?.tax_rate ??
+    0
+  );
+};
+
+const getAmountPaid = (sale) => {
+  return Number(
+    sale?.amount_paid ??
+    sale?.amountPaid ??
+    0
+  );
+};
+
+const getChange = (sale) => {
+  return Number(
+    sale?.change ??
+    0
   );
 };
 
@@ -199,18 +280,19 @@ const getItemsCount = (sale) => {
         total +
         Number(
           item?.quantity ??
-            item?.qty ??
-            0
+          item?.qty ??
+          0
         ),
       0
     );
   }
 
   return Number(
+    sale?.item_count ??
     sale?.items_count ??
-      sale?.itemsCount ??
-      sale?.total_items ??
-      0
+    sale?.itemsCount ??
+    sale?.total_items ??
+    0
   );
 };
 
@@ -250,7 +332,8 @@ const StatusBadge = ({ status }) => {
   } else if (
     normalized === "CANCELLED" ||
     normalized === "CANCELED" ||
-    normalized === "FAILED"
+    normalized === "FAILED" ||
+    normalized === "UNPAID"
   ) {
     variant = "danger";
   } else if (
@@ -270,25 +353,28 @@ const StatusBadge = ({ status }) => {
 };
 
 // =========================================================
-// SALES PAGE
+// SALES COMPONENT
 // =========================================================
 
 const Sales = () => {
-  // =======================================================
-  // STATE
-  // =======================================================
-
   const [sales, setSales] = useState([]);
 
-  const [loading, setLoading] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  const [loading, setLoading] =
+    useState(false);
 
-  const [error, setError] = useState("");
+  const [deleting, setDeleting] =
+    useState(false);
 
-  const [search, setSearch] = useState("");
+  const [error, setError] =
+    useState("");
 
-  const [statusFilter, setStatusFilter] =
-    useState("ALL");
+  const [search, setSearch] =
+    useState("");
+
+  const [
+    statusFilter,
+    setStatusFilter,
+  ] = useState("ALL");
 
   const [
     paymentStatusFilter,
@@ -301,28 +387,40 @@ const Sales = () => {
   const [dateTo, setDateTo] =
     useState("");
 
-  const [selectedSale, setSelectedSale] =
-    useState(null);
+  const [
+    selectedSale,
+    setSelectedSale,
+  ] = useState(null);
 
-  const [showViewModal, setShowViewModal] =
-    useState(false);
+  const [
+    showViewModal,
+    setShowViewModal,
+  ] = useState(false);
 
-  const [showDeleteModal, setShowDeleteModal] =
-    useState(false);
+  const [
+    showDeleteModal,
+    setShowDeleteModal,
+  ] = useState(false);
 
-  const [saleToDelete, setSaleToDelete] =
-    useState(null);
+  const [
+    saleToDelete,
+    setSaleToDelete,
+  ] = useState(null);
 
-  const [page, setPage] = useState(1);
+  const [page, setPage] =
+    useState(1);
 
-  const [pageSize] = useState(20);
+  const [pageSize] =
+    useState(20);
 
-  const [pagination, setPagination] =
-    useState({
-      count: 0,
-      next: null,
-      previous: null,
-    });
+  const [
+    pagination,
+    setPagination,
+  ] = useState({
+    count: 0,
+    next: null,
+    previous: null,
+  });
 
   // =======================================================
   // LOAD SALES
@@ -340,7 +438,8 @@ const Sales = () => {
         };
 
         if (search.trim()) {
-          params.search = search.trim();
+          params.search =
+            search.trim();
         }
 
         if (
@@ -372,9 +471,7 @@ const Sales = () => {
             params
           );
 
-        // -------------------------------------------------
         // DRF PAGINATION
-        // -------------------------------------------------
 
         if (
           response &&
@@ -387,10 +484,9 @@ const Sales = () => {
           );
 
           setPagination({
-            count:
-              Number(
-                response.count || 0
-              ),
+            count: Number(
+              response.count || 0
+            ),
             next:
               response.next ||
               null,
@@ -402,9 +498,7 @@ const Sales = () => {
           return;
         }
 
-        // -------------------------------------------------
-        // NON-PAGINATED RESPONSE
-        // -------------------------------------------------
+        // NON-PAGINATED ARRAY
 
         if (
           Array.isArray(response)
@@ -420,6 +514,8 @@ const Sales = () => {
 
           return;
         }
+
+        // RESPONSE.DATA ARRAY
 
         if (
           Array.isArray(
@@ -441,6 +537,12 @@ const Sales = () => {
         }
 
         setSales([]);
+
+        setPagination({
+          count: 0,
+          next: null,
+          previous: null,
+        });
       } catch (err) {
         console.error(
           "Failed to load sales:",
@@ -475,7 +577,7 @@ const Sales = () => {
   );
 
   // =======================================================
-  // INITIAL / FILTER LOAD
+  // LOAD
   // =======================================================
 
   useEffect(() => {
@@ -483,7 +585,7 @@ const Sales = () => {
   }, [loadSales]);
 
   // =======================================================
-  // RESET PAGE WHEN FILTER CHANGES
+  // RESET PAGE
   // =======================================================
 
   useEffect(() => {
@@ -497,7 +599,7 @@ const Sales = () => {
   ]);
 
   // =======================================================
-  // FILTER CURRENT RESULTS
+  // FILTER SALES
   // =======================================================
 
   const filteredSales = useMemo(() => {
@@ -608,19 +710,12 @@ const Sales = () => {
   const handleView = async (
     sale
   ) => {
-    const id = getSaleId(
-      sale
-    );
+    const id =
+      getSaleId(sale);
 
     if (!id) {
-      setSelectedSale(
-        sale
-      );
-
-      setShowViewModal(
-        true
-      );
-
+      setSelectedSale(sale);
+      setShowViewModal(true);
       return;
     }
 
@@ -633,49 +728,33 @@ const Sales = () => {
         );
 
       setSelectedSale(
-        response
+        response?.data || response
       );
 
-      setShowViewModal(
-        true
-      );
+      setShowViewModal(true);
     } catch (err) {
       console.error(
         "Failed to load sale:",
         err
       );
 
-      setSelectedSale(
-        sale
-      );
-
-      setShowViewModal(
-        true
-      );
+      setSelectedSale(sale);
+      setShowViewModal(true);
     } finally {
       setLoading(false);
     }
   };
 
   // =======================================================
-  // DELETE CONFIRMATION
+  // DELETE
   // =======================================================
 
   const openDeleteModal = (
     sale
   ) => {
-    setSaleToDelete(
-      sale
-    );
-
-    setShowDeleteModal(
-      true
-    );
+    setSaleToDelete(sale);
+    setShowDeleteModal(true);
   };
-
-  // =======================================================
-  // DELETE SALE
-  // =======================================================
 
   const handleDelete = async () => {
     const id =
@@ -695,17 +774,10 @@ const Sales = () => {
     setError("");
 
     try {
-      await salesApi.delete(
-        id
-      );
+      await salesApi.delete(id);
 
-      setShowDeleteModal(
-        false
-      );
-
-      setSaleToDelete(
-        null
-      );
+      setShowDeleteModal(false);
+      setSaleToDelete(null);
 
       await loadSales();
     } catch (err) {
@@ -736,9 +808,7 @@ const Sales = () => {
 
   const clearFilters = () => {
     setSearch("");
-    setStatusFilter(
-      "ALL"
-    );
+    setStatusFilter("ALL");
     setPaymentStatusFilter(
       "ALL"
     );
@@ -766,8 +836,7 @@ const Sales = () => {
     );
 
   const canGoNext =
-    page <
-      totalPages &&
+    page < totalPages &&
     Boolean(
       pagination.next
     );
@@ -778,10 +847,6 @@ const Sales = () => {
 
   return (
     <div>
-      {/* ===================================================
-          PAGE HEADER
-      ==================================================== */}
-
       <div className="page-header mb-4">
         <div>
           <h2 className="mb-1">
@@ -789,18 +854,15 @@ const Sales = () => {
           </h2>
 
           <p className="text-muted mb-0">
-            View and manage all sales transactions.
+            View and manage all sales
+            transactions.
           </p>
         </div>
 
         <Button
           variant="primary"
-          onClick={
-            loadSales
-          }
-          disabled={
-            loading
-          }
+          onClick={loadSales}
+          disabled={loading}
         >
           {loading ? (
             <Spinner
@@ -816,10 +878,6 @@ const Sales = () => {
         </Button>
       </div>
 
-      {/* ===================================================
-          ERROR
-      ==================================================== */}
-
       {error && (
         <Alert
           variant="danger"
@@ -833,9 +891,7 @@ const Sales = () => {
         </Alert>
       )}
 
-      {/* ===================================================
-          STATISTICS
-      ==================================================== */}
+      {/* STATISTICS */}
 
       <Row className="g-3 mb-4">
         <Col
@@ -915,15 +971,11 @@ const Sales = () => {
         </Col>
       </Row>
 
-      {/* ===================================================
-          FILTERS
-      ==================================================== */}
+      {/* FILTERS */}
 
       <Card className="dashboard-card border-0 mb-4">
         <Card.Body>
           <Row className="g-3">
-            {/* SEARCH */}
-
             <Col
               xl={4}
               lg={6}
@@ -938,23 +990,16 @@ const Sales = () => {
                 </InputGroup.Text>
 
                 <Form.Control
-                  value={
-                    search
-                  }
-                  onChange={(
-                    e
-                  ) =>
+                  value={search}
+                  onChange={(e) =>
                     setSearch(
-                      e.target
-                        .value
+                      e.target.value
                     )
                   }
                   placeholder="Invoice, customer, branch, sold by..."
                 />
               </InputGroup>
             </Col>
-
-            {/* STATUS */}
 
             <Col
               xl={2}
@@ -968,12 +1013,9 @@ const Sales = () => {
                 value={
                   statusFilter
                 }
-                onChange={(
-                  e
-                ) =>
+                onChange={(e) =>
                   setStatusFilter(
-                    e.target
-                      .value
+                    e.target.value
                   )
                 }
               >
@@ -999,8 +1041,6 @@ const Sales = () => {
               </Form.Select>
             </Col>
 
-            {/* PAYMENT STATUS */}
-
             <Col
               xl={2}
               lg={3}
@@ -1013,12 +1053,9 @@ const Sales = () => {
                 value={
                   paymentStatusFilter
                 }
-                onChange={(
-                  e
-                ) =>
+                onChange={(e) =>
                   setPaymentStatusFilter(
-                    e.target
-                      .value
+                    e.target.value
                   )
                 }
               >
@@ -1044,8 +1081,6 @@ const Sales = () => {
               </Form.Select>
             </Col>
 
-            {/* DATE FROM */}
-
             <Col
               xl={2}
               lg={3}
@@ -1056,21 +1091,14 @@ const Sales = () => {
 
               <Form.Control
                 type="date"
-                value={
-                  dateFrom
-                }
-                onChange={(
-                  e
-                ) =>
+                value={dateFrom}
+                onChange={(e) =>
                   setDateFrom(
-                    e.target
-                      .value
+                    e.target.value
                   )
                 }
               />
             </Col>
-
-            {/* DATE TO */}
 
             <Col
               xl={2}
@@ -1082,21 +1110,14 @@ const Sales = () => {
 
               <Form.Control
                 type="date"
-                value={
-                  dateTo
-                }
-                onChange={(
-                  e
-                ) =>
+                value={dateTo}
+                onChange={(e) =>
                   setDateTo(
-                    e.target
-                      .value
+                    e.target.value
                   )
                 }
               />
             </Col>
-
-            {/* CLEAR */}
 
             <Col
               xs={12}
@@ -1116,9 +1137,7 @@ const Sales = () => {
         </Card.Body>
       </Card>
 
-      {/* ===================================================
-          SALES TABLE
-      ==================================================== */}
+      {/* SALES TABLE */}
 
       <Card className="dashboard-card border-0">
         <Card.Body>
@@ -1150,42 +1169,15 @@ const Sales = () => {
           >
             <thead>
               <tr>
-                <th>
-                  INVOICE
-                </th>
-
-                <th>
-                  CUSTOMER
-                </th>
-
-                <th>
-                  BRANCH
-                </th>
-
-                <th>
-                  SOLD BY
-                </th>
-
-                <th>
-                  ITEMS
-                </th>
-
-                <th>
-                  TOTAL
-                </th>
-
-                <th>
-                  PAYMENT
-                </th>
-
-                <th>
-                  STATUS
-                </th>
-
-                <th>
-                  DATE
-                </th>
-
+                <th>INVOICE</th>
+                <th>CUSTOMER</th>
+                <th>BRANCH</th>
+                <th>SOLD BY</th>
+                <th>ITEMS</th>
+                <th>TOTAL</th>
+                <th>PAYMENT</th>
+                <th>STATUS</th>
+                <th>DATE</th>
                 <th></th>
               </tr>
             </thead>
@@ -1233,12 +1225,13 @@ const Sales = () => {
                 filteredSales.map(
                   (sale) => {
                     const id =
-                      getSaleId(
-                        sale
-                      );
+                      getSaleId(sale);
 
                     const status =
-                      getStatus(
+                      getStatus(sale);
+
+                    const paymentStatus =
+                      getPaymentStatus(
                         sale
                       );
 
@@ -1251,8 +1244,6 @@ const Sales = () => {
                           )
                         }
                       >
-                        {/* INVOICE */}
-
                         <td>
                           <strong>
                             {
@@ -1263,8 +1254,6 @@ const Sales = () => {
                           </strong>
                         </td>
 
-                        {/* CUSTOMER */}
-
                         <td>
                           {
                             getCustomerName(
@@ -1273,8 +1262,6 @@ const Sales = () => {
                           }
                         </td>
 
-                        {/* BRANCH */}
-
                         <td>
                           {
                             getBranchName(
@@ -1282,8 +1269,6 @@ const Sales = () => {
                             )
                           }
                         </td>
-
-                        {/* SOLD BY */}
 
                         <td>
                           <span className="fw-semibold">
@@ -1295,15 +1280,11 @@ const Sales = () => {
                           </span>
                         </td>
 
-                        {/* ITEMS */}
-
                         <td>
                           {getItemsCount(
                             sale
                           ).toLocaleString()}
                         </td>
-
-                        {/* TOTAL */}
 
                         <td>
                           <strong>
@@ -1314,8 +1295,6 @@ const Sales = () => {
                             )}
                           </strong>
                         </td>
-
-                        {/* PAYMENT */}
 
                         <td>
                           <div>
@@ -1330,14 +1309,10 @@ const Sales = () => {
 
                           <small className="text-muted">
                             {
-                              getPaymentStatus(
-                                sale
-                              )
+                              paymentStatus
                             }
                           </small>
                         </td>
-
-                        {/* STATUS */}
 
                         <td>
                           <StatusBadge
@@ -1347,8 +1322,6 @@ const Sales = () => {
                           />
                         </td>
 
-                        {/* DATE */}
-
                         <td>
                           {formatDate(
                             getCreatedDate(
@@ -1356,8 +1329,6 @@ const Sales = () => {
                             )
                           )}
                         </td>
-
-                        {/* ACTIONS */}
 
                         <td>
                           <Dropdown align="end">
@@ -1405,9 +1376,7 @@ const Sales = () => {
             </tbody>
           </Table>
 
-          {/* =================================================
-              PAGINATION
-          ================================================== */}
+          {/* PAGINATION */}
 
           <div className="d-flex justify-content-between align-items-center mt-3">
             <small className="text-muted">
@@ -1465,14 +1434,10 @@ const Sales = () => {
         </Card.Body>
       </Card>
 
-      {/* ===================================================
-          VIEW SALE MODAL
-      ==================================================== */}
+      {/* VIEW SALE MODAL */}
 
       <Modal
-        show={
-          showViewModal
-        }
+        show={showViewModal}
         onHide={() =>
           setShowViewModal(
             false
@@ -1494,9 +1459,7 @@ const Sales = () => {
               {/* HEADER */}
 
               <Row className="g-3 mb-4">
-                <Col
-                  md={6}
-                >
+                <Col md={6}>
                   <small className="text-muted">
                     Invoice
                   </small>
@@ -1510,9 +1473,7 @@ const Sales = () => {
                   </div>
                 </Col>
 
-                <Col
-                  md={6}
-                >
+                <Col md={6}>
                   <small className="text-muted">
                     Date
                   </small>
@@ -1526,9 +1487,7 @@ const Sales = () => {
                   </div>
                 </Col>
 
-                <Col
-                  md={6}
-                >
+                <Col md={6}>
                   <small className="text-muted">
                     Customer
                   </small>
@@ -1542,9 +1501,19 @@ const Sales = () => {
                   </div>
                 </Col>
 
-                <Col
-                  md={6}
-                >
+                <Col md={6}>
+                  <small className="text-muted">
+                    Customer Phone
+                  </small>
+
+                  <div className="fw-bold">
+                    {getCustomerPhone(
+                      selectedSale
+                    ) || "-"}
+                  </div>
+                </Col>
+
+                <Col md={6}>
                   <small className="text-muted">
                     Branch
                   </small>
@@ -1558,11 +1527,7 @@ const Sales = () => {
                   </div>
                 </Col>
 
-                {/* SOLD BY */}
-
-                <Col
-                  md={6}
-                >
+                <Col md={6}>
                   <small className="text-muted">
                     Sold By
                   </small>
@@ -1576,9 +1541,7 @@ const Sales = () => {
                   </div>
                 </Col>
 
-                <Col
-                  md={6}
-                >
+                <Col md={6}>
                   <small className="text-muted">
                     Payment Method
                   </small>
@@ -1592,11 +1555,49 @@ const Sales = () => {
                   </div>
                 </Col>
 
-                <Col
-                  md={6}
-                >
+                <Col md={6}>
                   <small className="text-muted">
-                    Status
+                    Payment Status
+                  </small>
+
+                  <div>
+                    <StatusBadge
+                      status={
+                        getPaymentStatus(
+                          selectedSale
+                        )
+                      }
+                    />
+                  </div>
+                </Col>
+
+                <Col md={6}>
+                  <small className="text-muted">
+                    Payment Phone
+                  </small>
+
+                  <div className="fw-bold">
+                    {getPaymentPhone(
+                      selectedSale
+                    ) || "-"}
+                  </div>
+                </Col>
+
+                <Col md={6}>
+                  <small className="text-muted">
+                    Transaction Reference
+                  </small>
+
+                  <div className="fw-bold">
+                    {getTransactionReference(
+                      selectedSale
+                    ) || "-"}
+                  </div>
+                </Col>
+
+                <Col md={6}>
+                  <small className="text-muted">
+                    Sale Status
                   </small>
 
                   <div>
@@ -1609,13 +1610,12 @@ const Sales = () => {
                 </Col>
               </Row>
 
-              {/* ITEMS */}
+              {/* SALE ITEMS */}
 
               {Array.isArray(
                 selectedSale.items
               ) &&
-                selectedSale
-                  .items.length >
+                selectedSale.items.length >
                   0 && (
                   <>
                     <h6 className="mb-3">
@@ -1634,11 +1634,23 @@ const Sales = () => {
                           </th>
 
                           <th>
+                            SKU
+                          </th>
+
+                          <th>
                             Qty
                           </th>
 
                           <th>
                             Unit Price
+                          </th>
+
+                          <th>
+                            Discount
+                          </th>
+
+                          <th>
+                            Tax
                           </th>
 
                           <th>
@@ -1656,11 +1668,22 @@ const Sales = () => {
                             const productName =
                               item?.product_name ??
                               item?.productName ??
-                              item?.product?.name ??
+                              item?.product
+                                ?.name ??
+                              item?.product_details
+                                ?.name ??
                               `Product ${
                                 item?.product ??
                                 "-"
                               }`;
+
+                            const productSku =
+                              item?.product_sku ??
+                              item?.product
+                                ?.sku ??
+                              item?.product_details
+                                ?.sku ??
+                              "-";
 
                             const quantity =
                               Number(
@@ -1674,6 +1697,18 @@ const Sales = () => {
                                 item?.unit_price ??
                                   item?.unitPrice ??
                                   item?.price ??
+                                  0
+                              );
+
+                            const discount =
+                              Number(
+                                item?.discount ??
+                                  0
+                              );
+
+                            const tax =
+                              Number(
+                                item?.tax ??
                                   0
                               );
 
@@ -1701,6 +1736,12 @@ const Sales = () => {
 
                                 <td>
                                   {
+                                    productSku
+                                  }
+                                </td>
+
+                                <td>
+                                  {
                                     quantity
                                   }
                                 </td>
@@ -1708,6 +1749,18 @@ const Sales = () => {
                                 <td>
                                   {formatCurrency(
                                     unitPrice
+                                  )}
+                                </td>
+
+                                <td>
+                                  {formatCurrency(
+                                    discount
+                                  )}
+                                </td>
+
+                                <td>
+                                  {formatCurrency(
+                                    tax
                                   )}
                                 </td>
 
@@ -1727,14 +1780,14 @@ const Sales = () => {
                   </>
                 )}
 
-              {/* TOTAL */}
+              {/* TOTALS */}
 
               <div className="d-flex justify-content-end mt-4">
                 <div
                   className="text-end"
                   style={{
                     minWidth:
-                      "250px",
+                      "280px",
                   }}
                 >
                   <div className="d-flex justify-content-between">
@@ -1744,10 +1797,8 @@ const Sales = () => {
 
                     <strong>
                       {formatCurrency(
-                        Number(
-                          selectedSale?.subtotal ??
-                            selectedSale?.sub_total ??
-                            0
+                        getSubtotal(
+                          selectedSale
                         )
                       )}
                     </strong>
@@ -1760,10 +1811,8 @@ const Sales = () => {
 
                     <strong>
                       {formatCurrency(
-                        Number(
-                          selectedSale?.discount ??
-                            selectedSale?.discount_amount ??
-                            0
+                        getDiscount(
+                          selectedSale
                         )
                       )}
                     </strong>
@@ -1771,15 +1820,45 @@ const Sales = () => {
 
                   <div className="d-flex justify-content-between mt-2">
                     <span>
-                      Tax
+                      Tax (
+                      {getTaxRate(
+                        selectedSale
+                      )}
+                      %)
                     </span>
 
                     <strong>
                       {formatCurrency(
-                        Number(
-                          selectedSale?.tax ??
-                            selectedSale?.tax_amount ??
-                            0
+                        getTaxAmount(
+                          selectedSale
+                        )
+                      )}
+                    </strong>
+                  </div>
+
+                  <div className="d-flex justify-content-between mt-2">
+                    <span>
+                      Amount Paid
+                    </span>
+
+                    <strong>
+                      {formatCurrency(
+                        getAmountPaid(
+                          selectedSale
+                        )
+                      )}
+                    </strong>
+                  </div>
+
+                  <div className="d-flex justify-content-between mt-2">
+                    <span>
+                      Change
+                    </span>
+
+                    <strong>
+                      {formatCurrency(
+                        getChange(
+                          selectedSale
                         )
                       )}
                     </strong>
@@ -1820,14 +1899,10 @@ const Sales = () => {
         </Modal.Footer>
       </Modal>
 
-      {/* ===================================================
-          DELETE MODAL
-      ==================================================== */}
+      {/* DELETE MODAL */}
 
       <Modal
-        show={
-          showDeleteModal
-        }
+        show={showDeleteModal}
         onHide={() => {
           if (!deleting) {
             setShowDeleteModal(
@@ -1869,9 +1944,7 @@ const Sales = () => {
         <Modal.Footer>
           <Button
             variant="light"
-            disabled={
-              deleting
-            }
+            disabled={deleting}
             onClick={() =>
               setShowDeleteModal(
                 false
@@ -1883,9 +1956,7 @@ const Sales = () => {
 
           <Button
             variant="danger"
-            disabled={
-              deleting
-            }
+            disabled={deleting}
             onClick={
               handleDelete
             }
