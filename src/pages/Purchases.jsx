@@ -1,3 +1,4 @@
+
 import React, {
   useCallback,
   useEffect,
@@ -11,1155 +12,601 @@ import {
   Button,
   Card,
   Col,
+  Form,
+  InputGroup,
+  Modal,
   Row,
   Spinner,
   Table,
 } from "react-bootstrap";
 
-import PurchaseModal from "../components/inventory/PurchaseModal";
-
-import purchasesApi from "../services/purchasesApi";
+import { useAuth } from "../context/AuthContext";
 import productsApi from "../services/productsApi";
-import suppliersApi from "../services/suppliersApi";
-import branchesApi from "../services/branchesApi";
 
-// ==========================================================
-// CONSTANTS
-// ==========================================================
+const Products = () => {
+  // =========================================================
+  // AUTH / ROLE
+  // =========================================================
 
-const PURCHASE_STATUSES = [
-  "draft",
-  "ordered",
-  "received",
-  "partially_received",
-  "cancelled",
-];
+  const { user } = useAuth();
 
-const PAYMENT_STATUSES = [
-  "pending",
-  "paid",
-  "partial",
-];
+  const userRole = String(
+    user?.role ||
+      user?.user_role ||
+      user?.role_name ||
+      ""
+  ).toLowerCase();
 
-// ==========================================================
-// PURCHASES PAGE
-// ==========================================================
+  /*
+   * Users allowed to see Cost Price:
+   * - admin
+   * - owner
+   * - manager
+   * - storekeeper
+   *
+   * Cashier can see Selling Price only.
+   */
+  const canViewCostPrice = [
+    "admin",
+    "owner",
+    "manager",
+    "storekeeper",
+  ].includes(userRole);
 
-const Purchases = () => {
-  // ========================================================
+  // =========================================================
   // STATE
-  // ========================================================
+  // =========================================================
 
-  const [purchases, setPurchases] = useState([]);
   const [products, setProducts] = useState([]);
-  const [suppliers, setSuppliers] = useState([]);
-  const [branches, setBranches] = useState([]);
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
 
-  const [showModal, setShowModal] = useState(false);
-  const [editingPurchase, setEditingPurchase] = useState(null);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // ========================================================
-  // NORMALIZE API RESPONSE
-  // ========================================================
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
-  const normalizeResponse = useCallback((data) => {
-    if (Array.isArray(data)) {
-      return data;
-    }
+  const [showModal, setShowModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
-    if (Array.isArray(data?.results)) {
-      return data.results;
-    }
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [deletingProduct, setDeletingProduct] = useState(null);
 
-    return [];
-  }, []);
+  const [formData, setFormData] = useState({
+    name: "",
+    sku: "",
+    brand: "",
+    category: "",
+    supplier: "",
+    cost_price: "",
+    price: "",
+    stock: "",
+    min_stock: "",
+  });
 
-  // ========================================================
-  // LOAD PURCHASES
-  // ========================================================
-
-  const loadPurchases = useCallback(async () => {
-    const data = await purchasesApi.getAll();
-
-    const purchaseList = normalizeResponse(data);
-
-    setPurchases(purchaseList);
-
-    return purchaseList;
-  }, [normalizeResponse]);
-
-  // ========================================================
-  // LOAD PRODUCTS
-  // ========================================================
-
-  const loadProducts = useCallback(async () => {
-    const data = await productsApi.getAll();
-
-    const productList = normalizeResponse(data);
-
-    setProducts(productList);
-
-    return productList;
-  }, [normalizeResponse]);
-
-  // ========================================================
-  // LOAD SUPPLIERS
-  // ========================================================
-
-  const loadSuppliers = useCallback(async () => {
-    const data = await suppliersApi.getAll();
-
-    const supplierList = normalizeResponse(data);
-
-    setSuppliers(supplierList);
-
-    return supplierList;
-  }, [normalizeResponse]);
-
-  // ========================================================
-  // LOAD BRANCHES
-  // ========================================================
-
-  const loadBranches = useCallback(async () => {
-    const data = await branchesApi.getAll();
-
-    const branchList = normalizeResponse(data);
-
-    setBranches(branchList);
-
-    return branchList;
-  }, [normalizeResponse]);
-
-  // ========================================================
-  // LOAD ALL DATA
-  // ========================================================
-
-  const loadData = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError("");
-
-      await Promise.all([
-        loadPurchases(),
-        loadProducts(),
-        loadSuppliers(),
-        loadBranches(),
-      ]);
-    } catch (err) {
-      console.error(
-        "Failed to load purchase data:",
-        err
-      );
-
-      console.error(
-        "Backend response:",
-        err?.response?.data
-      );
-
-      setError(
-        "Failed to load purchase data. Please try again."
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [
-    loadPurchases,
-    loadProducts,
-    loadSuppliers,
-    loadBranches,
-  ]);
-
-  // ========================================================
-  // INITIAL LOAD
-  // ========================================================
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  // ========================================================
+  // =========================================================
   // HELPERS
-  // ========================================================
-
-  const toNumber = (value) => {
-    const number = Number(value);
-
-    return Number.isFinite(number)
-      ? number
-      : 0;
-  };
-
-  // ========================================================
-  // FORMAT CURRENCY
-  // ========================================================
+  // =========================================================
 
   const formatCurrency = (value) => {
-    return `TSh ${toNumber(value).toLocaleString(
-      "en-TZ",
-      {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 2,
-      }
-    )}`;
+    const amount = Number(value || 0);
+
+    return new Intl.NumberFormat("en-TZ", {
+      style: "currency",
+      currency: "TZS",
+      maximumFractionDigits: 0,
+    }).format(amount);
   };
 
-  // ========================================================
-  // FORMAT DATE
-  // ========================================================
-
-  const formatDate = (value) => {
-    if (!value) {
-      return "-";
-    }
-
-    const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-      return "-";
-    }
-
-    return date.toLocaleDateString(
-      "en-TZ",
-      {
-        year: "numeric",
-        month: "short",
-        day: "2-digit",
-      }
+  const getProductStock = (product) => {
+    return Number(
+      product?.stock ??
+        product?.quantity ??
+        product?.current_stock ??
+        0
     );
   };
 
-  // ========================================================
-  // GET SUPPLIER
-  // ========================================================
-
-  const getSupplier = (purchase) => {
-    if (purchase?.supplier_name) {
-      return {
-        name: purchase.supplier_name,
-      };
-    }
-
-    if (
-      purchase?.supplier &&
-      typeof purchase.supplier === "object"
-    ) {
-      return purchase.supplier;
-    }
-
-    const supplierId =
-      purchase?.supplier ??
-      purchase?.supplier_id ??
-      purchase?.supplierId;
-
-    return suppliers.find(
-      (supplier) =>
-        Number(supplier.id) ===
-        Number(supplierId)
+  const getMinimumStock = (product) => {
+    return Number(
+      product?.min_stock ??
+        product?.minimum_stock ??
+        product?.reorder_level ??
+        0
     );
   };
 
-  // ========================================================
-  // GET BRANCH
-  // ========================================================
+  const getProductStatus = (product) => {
+    const stock = getProductStock(product);
+    const minimum = getMinimumStock(product);
 
-  const getBranch = (purchase) => {
-    if (purchase?.branch_name) {
-      return {
-        name: purchase.branch_name,
-      };
+    if (stock <= 0) {
+      return "out";
     }
 
-    if (
-      purchase?.branch &&
-      typeof purchase.branch === "object"
-    ) {
-      return purchase.branch;
+    if (minimum > 0 && stock <= minimum) {
+      return "low";
     }
 
-    const branchId =
-      purchase?.branch ??
-      purchase?.branch_id ??
-      purchase?.branchId;
-
-    return branches.find(
-      (branch) =>
-        Number(branch.id) ===
-        Number(branchId)
-    );
+    return "available";
   };
 
-  // ========================================================
-  // GET CREATED BY
-  // ========================================================
+  const getStatusBadge = (product) => {
+    const status = getProductStatus(product);
 
-  const getCreatedBy = (purchase) => {
-    // Preferred backend field
-    if (
-      purchase?.created_by_name &&
-      typeof purchase.created_by_name === "string"
-    ) {
-      return purchase.created_by_name;
-    }
-
-    // Alternative camelCase field
-    if (
-      purchase?.createdByName &&
-      typeof purchase.createdByName === "string"
-    ) {
-      return purchase.createdByName;
-    }
-
-    // If API returns created_by as a string
-    if (
-      typeof purchase?.created_by === "string"
-    ) {
-      return purchase.created_by;
-    }
-
-    // If API returns createdBy as a string
-    if (
-      typeof purchase?.createdBy === "string"
-    ) {
-      return purchase.createdBy;
-    }
-
-    // Nested created_by object
-    if (
-      purchase?.created_by &&
-      typeof purchase.created_by === "object"
-    ) {
+    if (status === "out") {
       return (
-        purchase.created_by.full_name ||
-        purchase.created_by.name ||
-        purchase.created_by.username ||
-        purchase.created_by.email ||
-        "-"
+        <Badge bg="danger">
+          Out of Stock
+        </Badge>
       );
     }
 
-    // Nested createdBy object
-    if (
-      purchase?.createdBy &&
-      typeof purchase.createdBy === "object"
-    ) {
+    if (status === "low") {
       return (
-        purchase.createdBy.full_name ||
-        purchase.createdBy.name ||
-        purchase.createdBy.username ||
-        purchase.createdBy.email ||
-        "-"
+        <Badge bg="warning" text="dark">
+          Low Stock
+        </Badge>
       );
     }
 
-    return "-";
-  };
-
-  // ========================================================
-  // GET PURCHASE ITEMS
-  // ========================================================
-
-  const getItems = (purchase) => {
-    if (Array.isArray(purchase?.items)) {
-      return purchase.items;
-    }
-
-    if (
-      Array.isArray(
-        purchase?.purchase_items
-      )
-    ) {
-      return purchase.purchase_items;
-    }
-
-    return [];
-  };
-
-  // ========================================================
-  // GET PURCHASE TOTAL
-  // ========================================================
-
-  const getPurchaseTotal = (purchase) => {
-    return toNumber(
-      purchase?.total ??
-        purchase?.total_amount ??
-        purchase?.grand_total
-    );
-  };
-
-  // ========================================================
-  // GET PURCHASE NUMBER
-  // ========================================================
-
-  const getPurchaseNumber = (purchase) => {
     return (
-      purchase?.purchase_number ||
-      purchase?.purchaseNumber ||
+      <Badge bg="success">
+        In Stock
+      </Badge>
+    );
+  };
+
+  const getName = (object) => {
+    if (!object) {
+      return "-";
+    }
+
+    if (typeof object === "string") {
+      return object;
+    }
+
+    return (
+      object.name ||
+      object.title ||
+      object.label ||
+      object.brand_name ||
+      object.category_name ||
       "-"
     );
   };
 
-  // ========================================================
-  // GET PRODUCT NAME
-  // ========================================================
+  // =========================================================
+  // LOAD PRODUCTS
+  // =========================================================
 
-  const getProductName = (item) => {
-    if (item?.product_name) {
-      return item.product_name;
-    }
-
-    if (
-      item?.product &&
-      typeof item.product === "object"
-    ) {
-      return (
-        item.product.name ||
-        item.product.product_name ||
-        "-"
-      );
-    }
-
-    const productId =
-      item?.product ??
-      item?.product_id ??
-      item?.productId;
-
-    const product = products.find(
-      (product) =>
-        Number(product.id) ===
-        Number(productId)
-    );
-
-    return product?.name || "-";
-  };
-
-  // ========================================================
-  // GET STATUS
-  // ========================================================
-
-  const getStatus = (purchase) => {
-    return PURCHASE_STATUSES.includes(
-      purchase?.status
-    )
-      ? purchase.status
-      : "draft";
-  };
-
-  // ========================================================
-  // GET PAYMENT STATUS
-  // ========================================================
-
-  const getPaymentStatus = (purchase) => {
-    return PAYMENT_STATUSES.includes(
-      purchase?.payment_status
-    )
-      ? purchase.payment_status
-      : "pending";
-  };
-
-  // ========================================================
-  // STATUS LABEL
-  // ========================================================
-
-  const getStatusLabel = (status) => {
-    const labels = {
-      draft: "Draft",
-      ordered: "Ordered",
-      received: "Received",
-      partially_received:
-        "Partially Received",
-      cancelled: "Cancelled",
-    };
-
-    return labels[status] || status;
-  };
-
-  // ========================================================
-  // STATUS BADGE
-  // ========================================================
-
-  const getStatusVariant = (status) => {
-    switch (status) {
-      case "draft":
-        return "secondary";
-
-      case "ordered":
-        return "info";
-
-      case "received":
-        return "success";
-
-      case "partially_received":
-        return "warning";
-
-      case "cancelled":
-        return "danger";
-
-      default:
-        return "secondary";
-    }
-  };
-
-  // ========================================================
-  // PAYMENT STATUS LABEL
-  // ========================================================
-
-  const getPaymentStatusLabel = (
-    paymentStatus
-  ) => {
-    const labels = {
-      pending: "Pending",
-      paid: "Paid",
-      partial: "Partial",
-    };
-
-    return (
-      labels[paymentStatus] ||
-      "Pending"
-    );
-  };
-
-  // ========================================================
-  // PAYMENT STATUS BADGE
-  // ========================================================
-
-  const getPaymentStatusVariant = (
-    paymentStatus
-  ) => {
-    switch (paymentStatus) {
-      case "paid":
-        return "success";
-
-      case "partial":
-        return "warning";
-
-      case "pending":
-        return "secondary";
-
-      default:
-        return "secondary";
-    }
-  };
-
-  // ========================================================
-  // STATISTICS
-  // ========================================================
-
-  const statistics = useMemo(() => {
-    const totalPurchases =
-      purchases.length;
-
-    const totalPurchaseValue =
-      purchases.reduce(
-        (sum, purchase) =>
-          sum +
-          getPurchaseTotal(
-            purchase
-          ),
-        0
-      );
-
-    const totalItemsPurchased =
-      purchases.reduce(
-        (sum, purchase) =>
-          sum +
-          getItems(purchase).reduce(
-            (
-              itemSum,
-              item
-            ) =>
-              itemSum +
-              toNumber(
-                item.quantity
-              ),
-            0
-          ),
-        0
-      );
-
-    const receivedPurchases =
-      purchases.filter(
-        (purchase) =>
-          purchase.status ===
-          "received"
-      ).length;
-
-    return {
-      totalPurchases,
-      totalPurchaseValue,
-      totalItemsPurchased,
-      receivedPurchases,
-    };
-  }, [purchases]);
-
-  // ========================================================
-  // OPEN CREATE MODAL
-  // ========================================================
-
-  const handleCreate = () => {
-    setEditingPurchase(null);
+  const loadProducts = useCallback(async () => {
+    setLoading(true);
     setError("");
-    setShowModal(true);
-  };
 
-  // ========================================================
-  // OPEN EDIT MODAL
-  // ========================================================
-
-  const handleEdit = (purchase) => {
-    setError("");
-    setEditingPurchase(purchase);
-    setShowModal(true);
-  };
-
-  // ========================================================
-  // CLOSE MODAL
-  // ========================================================
-
-  const handleCloseModal = () => {
-    if (saving) {
-      return;
-    }
-
-    setShowModal(false);
-    setEditingPurchase(null);
-  };
-
-  // ========================================================
-  // PREPARE ITEM
-  // ========================================================
-
-  const prepareItem = (item) => {
-    const quantity = Number(
-      item?.quantity ?? 0
-    );
-
-    const unitCost = Number(
-      item?.unit_cost ?? 0
-    );
-
-    const discount = Number(
-      item?.discount ?? 0
-    );
-
-    const tax = Number(
-      item?.tax ?? 0
-    );
-
-    return {
-      product: Number(
-        item?.product?.id ??
-          item?.product_id ??
-          item?.product
-      ),
-
-      quantity,
-
-      received_quantity: Number(
-        item?.received_quantity ?? 0
-      ),
-
-      unit_cost: unitCost,
-
-      discount,
-
-      tax,
-
-      // Backend recalculates this.
-      // Keep it only if the serializer accepts it.
-      total: Number(
-        item?.total ?? 0
-      ),
-    };
-  };
-
-  // ========================================================
-  // PREPARE PURCHASE PAYLOAD
-  // ========================================================
-
-  const preparePayload = (
-    purchaseData
-  ) => {
-    const status =
-      PURCHASE_STATUSES.includes(
-        purchaseData?.status
-      )
-        ? purchaseData.status
-        : "draft";
-
-    const paymentStatus =
-      PAYMENT_STATUSES.includes(
-        purchaseData?.payment_status
-      )
-        ? purchaseData.payment_status
-        : "pending";
-
-    const items =
-      Array.isArray(
-        purchaseData?.items
-      )
-        ? purchaseData.items.map(
-            prepareItem
-          )
-        : [];
-
-    return {
-      supplier: Number(
-        purchaseData?.supplier?.id ??
-          purchaseData?.supplier
-      ),
-
-      branch: Number(
-        purchaseData?.branch?.id ??
-          purchaseData?.branch
-      ),
-
-      status,
-
-      payment_status:
-        paymentStatus,
-
-      notes:
-        String(
-          purchaseData?.notes || ""
-        ).trim(),
-
-      items,
-
-      // IMPORTANT:
-      // Do NOT send created_by here.
-      // The backend automatically sets
-      // created_by = request.user.
-    };
-  };
-
-  // ========================================================
-  // VALIDATE PAYLOAD
-  // ========================================================
-
-  const validatePayload = (
-    payload
-  ) => {
-    if (
-      !payload.supplier ||
-      Number.isNaN(
-        payload.supplier
-      )
-    ) {
-      throw new Error(
-        "Supplier is required."
-      );
-    }
-
-    if (
-      !payload.branch ||
-      Number.isNaN(
-        payload.branch
-      )
-    ) {
-      throw new Error(
-        "Branch is required."
-      );
-    }
-
-    if (
-      !Array.isArray(
-        payload.items
-      ) ||
-      payload.items.length === 0
-    ) {
-      throw new Error(
-        "At least one purchase item is required."
-      );
-    }
-
-    payload.items.forEach(
-      (item, index) => {
-        if (
-          !item.product ||
-          Number.isNaN(
-            item.product
-          )
-        ) {
-          throw new Error(
-            `Item ${
-              index + 1
-            }: Product is required.`
-          );
-        }
-
-        if (
-          !Number.isInteger(
-            item.quantity
-          ) ||
-          item.quantity <= 0
-        ) {
-          throw new Error(
-            `Item ${
-              index + 1
-            }: Quantity must be greater than zero.`
-          );
-        }
-
-        if (
-          !Number.isFinite(
-            item.unit_cost
-          ) ||
-          item.unit_cost < 0
-        ) {
-          throw new Error(
-            `Item ${
-              index + 1
-            }: Unit cost is invalid.`
-          );
-        }
-
-        if (
-          !Number.isFinite(
-            item.discount
-          ) ||
-          item.discount < 0
-        ) {
-          throw new Error(
-            `Item ${
-              index + 1
-            }: Discount is invalid.`
-          );
-        }
-
-        if (
-          !Number.isFinite(
-            item.tax
-          ) ||
-          item.tax < 0 ||
-          item.tax > 100
-        ) {
-          throw new Error(
-            `Item ${
-              index + 1
-            }: Tax must be between 0 and 100.`
-          );
-        }
-      }
-    );
-  };
-
-  // ========================================================
-  // HANDLE SAVE
-  // CREATE OR UPDATE
-  // ========================================================
-
-  const handleSave = async (
-    purchaseData
-  ) => {
     try {
-      setSaving(true);
-      setError("");
+      /*
+       * IMPORTANT:
+       * The imported service is productsApi,
+       * so we must use productsApi here.
+       */
+      const response = await productsApi.getAll();
 
-      const payload =
-        preparePayload(
-          purchaseData
-        );
+      const data =
+        response?.data?.results ||
+        response?.data ||
+        [];
 
-      validatePayload(
-        payload
+      setProducts(
+        Array.isArray(data) ? data : []
       );
-
-      console.log(
-        "=========================================="
-      );
-
-      console.log(
-        editingPurchase
-          ? "UPDATE PURCHASE PAYLOAD:"
-          : "CREATE PURCHASE PAYLOAD:"
-      );
-
-      console.log(
-        JSON.stringify(
-          payload,
-          null,
-          2
-        )
-      );
-
-      console.log(
-        "=========================================="
-      );
-
-      // ====================================================
-      // UPDATE
-      // ====================================================
-
-      if (editingPurchase?.id) {
-        await purchasesApi.update(
-          editingPurchase.id,
-          payload
-        );
-      }
-
-      // ====================================================
-      // CREATE
-      // ====================================================
-
-      else {
-        await purchasesApi.create(
-          payload
-        );
-      }
-
-      // ====================================================
-      // CLOSE MODAL
-      // ====================================================
-
-      setShowModal(false);
-      setEditingPurchase(null);
-
-      // ====================================================
-      // RELOAD
-      // ====================================================
-
-      await Promise.all([
-        loadPurchases(),
-        loadProducts(),
-      ]);
     } catch (err) {
       console.error(
-        "Failed to save purchase:",
+        "Failed to load products:",
         err
       );
 
-      console.error(
-        "Backend response:",
-        err?.response?.data
+      setError(
+        err?.response?.data?.detail ||
+          err?.response?.data?.message ||
+          "Failed to load products."
       );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-      // ====================================================
-      // FRONTEND ERROR
-      // ====================================================
+  useEffect(() => {
+    loadProducts();
+  }, [loadProducts]);
 
-      if (
-        err instanceof Error &&
-        !err?.response
-      ) {
-        setError(
-          err.message ||
-            "Failed to save purchase."
+  // =========================================================
+  // FILTER PRODUCTS
+  // =========================================================
+
+  const filteredProducts = useMemo(() => {
+    const keyword = search
+      .trim()
+      .toLowerCase();
+
+    return products.filter((product) => {
+      const matchesSearch =
+        !keyword ||
+        String(product?.name || "")
+          .toLowerCase()
+          .includes(keyword) ||
+        String(product?.sku || "")
+          .toLowerCase()
+          .includes(keyword) ||
+        String(getName(product?.brand))
+          .toLowerCase()
+          .includes(keyword) ||
+        String(getName(product?.category))
+          .toLowerCase()
+          .includes(keyword) ||
+        String(getName(product?.supplier))
+          .toLowerCase()
+          .includes(keyword);
+
+      const status =
+        getProductStatus(product);
+
+      const matchesStatus =
+        statusFilter === "all" ||
+        (
+          statusFilter === "available" &&
+          status === "available"
+        ) ||
+        (
+          statusFilter === "low" &&
+          status === "low"
+        ) ||
+        (
+          statusFilter === "out" &&
+          status === "out"
         );
 
-        return;
-      }
+      return (
+        matchesSearch &&
+        matchesStatus
+      );
+    });
+  }, [
+    products,
+    search,
+    statusFilter,
+  ]);
 
-      // ====================================================
-      // BACKEND ERROR
-      // ====================================================
+  // =========================================================
+  // FORM
+  // =========================================================
 
-      const backendError =
-        err?.response?.data;
+  const resetForm = () => {
+    setFormData({
+      name: "",
+      sku: "",
+      brand: "",
+      category: "",
+      supplier: "",
+      cost_price: "",
+      price: "",
+      stock: "",
+      min_stock: "",
+    });
 
-      let message =
-        "Failed to save purchase.";
+    setEditingProduct(null);
+  };
 
-      if (
-        backendError &&
-        typeof backendError ===
-          "object"
-      ) {
-        message =
-          Object.entries(
-            backendError
-          )
-            .map(
-              ([field, messages]) => {
-                const formatted =
-                  Array.isArray(
-                    messages
-                  )
-                    ? messages.join(
-                        ", "
-                      )
-                    : String(
-                        messages
-                      );
+  const handleShowAdd = () => {
+    resetForm();
+    setError("");
+    setSuccess("");
+    setShowModal(true);
+  };
 
-                return `${field}: ${formatted}`;
-              }
-            )
-            .join("\n");
-      } else if (
-        backendError
-      ) {
-        message =
-          String(
-            backendError
+  const handleShowEdit = (product) => {
+    setEditingProduct(product);
+
+    setFormData({
+      name: product?.name || "",
+
+      sku: product?.sku || "",
+
+      brand:
+        typeof product?.brand === "object"
+          ? product?.brand?.id || ""
+          : product?.brand || "",
+
+      category:
+        typeof product?.category === "object"
+          ? product?.category?.id || ""
+          : product?.category || "",
+
+      supplier:
+        typeof product?.supplier === "object"
+          ? product?.supplier?.id || ""
+          : product?.supplier || "",
+
+      /*
+       * Only load cost price into the form
+       * for authorized users.
+       */
+      cost_price: canViewCostPrice
+        ? product?.cost_price ?? ""
+        : "",
+
+      price: product?.price ?? "",
+
+      stock:
+        product?.stock ??
+        product?.quantity ??
+        product?.current_stock ??
+        "",
+
+      min_stock:
+        product?.min_stock ??
+        product?.minimum_stock ??
+        product?.reorder_level ??
+        "",
+    });
+
+    setError("");
+    setSuccess("");
+    setShowModal(true);
+  };
+
+  const handleChange = (event) => {
+    const {
+      name,
+      value,
+    } = event.target;
+
+    setFormData((previous) => ({
+      ...previous,
+      [name]: value,
+    }));
+  };
+
+  // =========================================================
+  // SAVE PRODUCT
+  // =========================================================
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    setSaving(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const payload = {
+        name: formData.name.trim(),
+
+        sku: formData.sku.trim(),
+
+        brand:
+          formData.brand || null,
+
+        category:
+          formData.category || null,
+
+        supplier:
+          formData.supplier || null,
+
+        price:
+          Number(formData.price || 0),
+
+        stock:
+          Number(formData.stock || 0),
+
+        min_stock:
+          Number(formData.min_stock || 0),
+      };
+
+      /*
+       * Only send cost_price when the current
+       * user is allowed to manage it.
+       */
+      if (canViewCostPrice) {
+        payload.cost_price =
+          Number(
+            formData.cost_price || 0
           );
       }
 
-      setError(message);
+      if (editingProduct) {
+        await productsApi.update(
+          editingProduct.id,
+          payload
+        );
+
+        setSuccess(
+          "Product updated successfully."
+        );
+      } else {
+        await productsApi.create(
+          payload
+        );
+
+        setSuccess(
+          "Product created successfully."
+        );
+      }
+
+      setShowModal(false);
+
+      resetForm();
+
+      await loadProducts();
+    } catch (err) {
+      console.error(
+        "Failed to save product:",
+        err
+      );
+
+      const responseData =
+        err?.response?.data;
+
+      if (
+        responseData &&
+        typeof responseData === "object"
+      ) {
+        const messages =
+          Object.entries(
+            responseData
+          )
+            .map(
+              ([field, message]) => {
+                const value =
+                  Array.isArray(message)
+                    ? message.join(", ")
+                    : String(message);
+
+                return `${field}: ${value}`;
+              }
+            )
+            .join(" | ");
+
+        setError(
+          messages ||
+            "Failed to save product."
+        );
+      } else {
+        setError(
+          responseData ||
+            "Failed to save product."
+        );
+      }
     } finally {
       setSaving(false);
     }
   };
 
-  // ========================================================
-  // DELETE PURCHASE
-  // ========================================================
+  // =========================================================
+  // DELETE
+  // =========================================================
 
-  const handleDelete = async (
-    id
+  const handleShowDelete = (
+    product
   ) => {
-    if (!id) {
+    setDeletingProduct(product);
+    setShowDeleteModal(true);
+  };
+
+  const handleDelete = async () => {
+    if (!deletingProduct) {
       return;
     }
 
-    const confirmed =
-      window.confirm(
-        "Are you sure you want to delete this purchase?"
-      );
-
-    if (!confirmed) {
-      return;
-    }
+    setSaving(true);
+    setError("");
+    setSuccess("");
 
     try {
-      setError("");
-
-      await purchasesApi.delete(
-        id
+      await productsApi.delete(
+        deletingProduct.id
       );
 
-      await Promise.all([
-        loadPurchases(),
-        loadProducts(),
-      ]);
+      setSuccess(
+        "Product deleted successfully."
+      );
+
+      setShowDeleteModal(false);
+
+      setDeletingProduct(null);
+
+      await loadProducts();
     } catch (err) {
       console.error(
-        "Failed to delete purchase:",
+        "Failed to delete product:",
         err
       );
 
-      console.error(
-        "Backend response:",
-        err?.response?.data
+      setError(
+        err?.response?.data?.detail ||
+          err?.response?.data?.message ||
+          "Failed to delete product."
       );
-
-      const backendError =
-        err?.response?.data;
-
-      let message =
-        "Failed to delete purchase.";
-
-      if (
-        backendError &&
-        typeof backendError ===
-          "object"
-      ) {
-        message =
-          Object.entries(
-            backendError
-          )
-            .map(
-              ([field, messages]) => {
-                const formatted =
-                  Array.isArray(
-                    messages
-                  )
-                    ? messages.join(
-                        ", "
-                      )
-                    : String(
-                        messages
-                      );
-
-                return `${field}: ${formatted}`;
-              }
-            )
-            .join("\n");
-      } else if (
-        backendError
-      ) {
-        message =
-          String(
-            backendError
-          );
-      }
-
-      setError(message);
+    } finally {
+      setSaving(false);
     }
   };
 
-  // ========================================================
-  // SORT PURCHASES
-  // ========================================================
+  // =========================================================
+  // SUMMARY
+  // =========================================================
 
-  const sortedPurchases =
-    useMemo(() => {
-      return [...purchases].sort(
-        (a, b) => {
-          const dateA =
-            new Date(
-              a.created_at ??
-                a.order_date ??
-                0
-            ).getTime();
+  const totalProducts =
+    products.length;
 
-          const dateB =
-            new Date(
-              b.created_at ??
-                b.order_date ??
-                0
-            ).getTime();
+  const availableProducts =
+    products.filter(
+      (product) =>
+        getProductStatus(product) ===
+        "available"
+    ).length;
 
-          return (
-            dateB - dateA
-          );
-        }
-      );
-    }, [purchases]);
+  const lowStockProducts =
+    products.filter(
+      (product) =>
+        getProductStatus(product) ===
+        "low"
+    ).length;
 
-  // ========================================================
+  const outOfStockProducts =
+    products.filter(
+      (product) =>
+        getProductStatus(product) ===
+        "out"
+    ).length;
+
+  // =========================================================
+  // TABLE COLUMN COUNT
+  // =========================================================
+
+  const tableColumnCount =
+    canViewCostPrice ? 11 : 10;
+
+  // =========================================================
   // RENDER
-  // ========================================================
+  // =========================================================
 
   return (
-    <div>
+    <div className="container-fluid py-3">
 
-      {/* ==================================================
-          PAGE HEADER
-      ================================================== */}
+      {/* =====================================================
+          HEADER
+      ===================================================== */}
 
-      <div className="page-header d-flex justify-content-between align-items-center mb-4">
+      <Row className="align-items-center mb-3">
 
-        <div>
-          <h2>
-            Purchases
-          </h2>
+        <Col>
+          <h4 className="mb-1">
+            Products
+          </h4>
 
-          <p className="mb-0">
-            Manage purchases and receive stock.
+          <p className="text-muted mb-0">
+            Manage your products, prices
+            and stock.
           </p>
-        </div>
+        </Col>
 
-        <Button
-          variant="primary"
-          onClick={handleCreate}
-          disabled={
-            loading ||
-            saving
-          }
-        >
-          <i className="bi bi-plus-lg me-2" />
-          New Purchase
-        </Button>
+        <Col xs="auto">
+          <Button
+            variant="primary"
+            onClick={handleShowAdd}
+          >
+            + Add Product
+          </Button>
+        </Col>
 
-      </div>
+      </Row>
 
-      {/* ==================================================
-          ERROR
-      ================================================== */}
+      {/* =====================================================
+          ALERTS
+      ===================================================== */}
 
       {error && (
         <Alert
@@ -1169,87 +616,79 @@ const Purchases = () => {
             setError("")
           }
         >
-          <strong>
-            Error
-          </strong>
-
-          <div
-            className="mt-1"
-            style={{
-              whiteSpace:
-                "pre-line",
-            }}
-          >
-            {error}
-          </div>
+          {error}
         </Alert>
       )}
 
-      {/* ==================================================
-          STATISTICS
-      ================================================== */}
+      {success && (
+        <Alert
+          variant="success"
+          dismissible
+          onClose={() =>
+            setSuccess("")
+          }
+        >
+          {success}
+        </Alert>
+      )}
 
-      <Row className="g-3 mb-4">
+      {/* =====================================================
+          SUMMARY
+      ===================================================== */}
 
-        <Col xl={3} md={6}>
-          <Card className="dashboard-card border-0 h-100">
+      <Row className="g-3 mb-3">
+
+        <Col md={3}>
+          <Card>
             <Card.Body>
-              <small className="text-muted">
-                Total Purchases
-              </small>
+              <div className="text-muted small">
+                TOTAL PRODUCTS
+              </div>
 
-              <h4 className="mt-2 mb-0">
-                {statistics.totalPurchases.toLocaleString(
-                  "en-TZ"
-                )}
+              <h4 className="mb-0">
+                {totalProducts}
               </h4>
             </Card.Body>
           </Card>
         </Col>
 
-        <Col xl={3} md={6}>
-          <Card className="dashboard-card border-0 h-100">
+        <Col md={3}>
+          <Card>
             <Card.Body>
-              <small className="text-muted">
-                Purchase Value
-              </small>
+              <div className="text-muted small">
+                IN STOCK
+              </div>
 
-              <h4 className="mt-2 mb-0">
-                {formatCurrency(
-                  statistics.totalPurchaseValue
-                )}
+              <h4 className="mb-0 text-success">
+                {availableProducts}
               </h4>
             </Card.Body>
           </Card>
         </Col>
 
-        <Col xl={3} md={6}>
-          <Card className="dashboard-card border-0 h-100">
+        <Col md={3}>
+          <Card>
             <Card.Body>
-              <small className="text-muted">
-                Items Purchased
-              </small>
+              <div className="text-muted small">
+                LOW STOCK
+              </div>
 
-              <h4 className="mt-2 mb-0">
-                {statistics.totalItemsPurchased.toLocaleString(
-                  "en-TZ"
-                )}
+              <h4 className="mb-0 text-warning">
+                {lowStockProducts}
               </h4>
             </Card.Body>
           </Card>
         </Col>
 
-        <Col xl={3} md={6}>
-          <Card className="dashboard-card border-0 h-100">
+        <Col md={3}>
+          <Card>
             <Card.Body>
-              <small className="text-muted">
-                Received Purchases
-              </small>
+              <div className="text-muted small">
+                OUT OF STOCK
+              </div>
 
-              <h4 className="mt-2 mb-0 text-success">
-                {statistics.receivedPurchases.toLocaleString(
-                  "en-TZ"
-                )}
+              <h4 className="mb-0 text-danger">
+                {outOfStockProducts}
               </h4>
             </Card.Body>
           </Card>
@@ -1257,484 +696,734 @@ const Purchases = () => {
 
       </Row>
 
-      {/* ==================================================
-          PURCHASE TABLE
-      ================================================== */}
+      {/* =====================================================
+          FILTERS
+      ===================================================== */}
 
-      <Card className="dashboard-card border-0">
+      <Card className="mb-3">
 
         <Card.Body>
 
-          <div className="d-flex justify-content-between align-items-center mb-3">
+          <Row className="g-2">
 
-            <div>
-              <h5 className="mb-1">
-                Purchase List
-              </h5>
+            <Col md={8}>
 
-              <small className="text-muted">
-                {sortedPurchases.length}{" "}
-                purchases recorded
-              </small>
-            </div>
+              <InputGroup>
 
-          </div>
+                <InputGroup.Text>
+                  Search
+                </InputGroup.Text>
 
-          {/* ==================================================
-              LOADING
-          ================================================== */}
+                <Form.Control
+                  type="text"
+                  placeholder="Search by product, SKU, brand, category or supplier..."
+                  value={search}
+                  onChange={(event) =>
+                    setSearch(
+                      event.target.value
+                    )
+                  }
+                />
 
-          {loading ? (
+              </InputGroup>
 
-            <div className="text-center py-5">
+            </Col>
 
-              <Spinner
-                animation="border"
-                variant="primary"
-              />
+            <Col md={4}>
 
-              <p className="mt-3 text-muted">
-                Loading purchases...
-              </p>
-
-            </div>
-
-          ) : (
-
-            <div className="table-responsive">
-
-              <Table
-                hover
-                bordered
-                className="align-middle"
+              <Form.Select
+                value={statusFilter}
+                onChange={(event) =>
+                  setStatusFilter(
+                    event.target.value
+                  )
+                }
               >
 
-                <thead>
+                <option value="all">
+                  All Status
+                </option>
 
-                  <tr>
+                <option value="available">
+                  In Stock
+                </option>
 
-                    <th>
-                      DATE
-                    </th>
+                <option value="low">
+                  Low Stock
+                </option>
 
-                    <th>
-                      PURCHASE NUMBER
-                    </th>
+                <option value="out">
+                  Out of Stock
+                </option>
 
-                    <th>
-                      SUPPLIER
-                    </th>
+              </Form.Select>
 
-                    <th>
-                      BRANCH
-                    </th>
+            </Col>
 
-                    <th>
-                      CREATED BY
-                    </th>
-
-                    <th>
-                      ITEMS
-                    </th>
-
-                    <th>
-                      TOTAL
-                    </th>
-
-                    <th>
-                      STATUS
-                    </th>
-
-                    <th>
-                      PAYMENT
-                    </th>
-
-                    <th>
-                      ACTION
-                    </th>
-
-                  </tr>
-
-                </thead>
-
-                <tbody>
-
-                  {sortedPurchases.length === 0 ? (
-
-                    <tr>
-
-                      <td
-                        colSpan="10"
-                        className="text-center py-5 text-muted"
-                      >
-
-                        <i className="bi bi-bag fs-3 d-block mb-2" />
-
-                        No purchases recorded.
-
-                      </td>
-
-                    </tr>
-
-                  ) : (
-
-                    sortedPurchases.map(
-                      (purchase) => {
-
-                        const supplier =
-                          getSupplier(
-                            purchase
-                          );
-
-                        const branch =
-                          getBranch(
-                            purchase
-                          );
-
-                        const createdBy =
-                          getCreatedBy(
-                            purchase
-                          );
-
-                        const items =
-                          getItems(
-                            purchase
-                          );
-
-                        const total =
-                          getPurchaseTotal(
-                            purchase
-                          );
-
-                        const status =
-                          getStatus(
-                            purchase
-                          );
-
-                        const paymentStatus =
-                          getPaymentStatus(
-                            purchase
-                          );
-
-                        return (
-
-                          <tr
-                            key={
-                              purchase.id
-                            }
-                          >
-
-                            {/* DATE */}
-
-                            <td>
-                              {formatDate(
-                                purchase.order_date ??
-                                  purchase.created_at
-                              )}
-                            </td>
-
-                            {/* PURCHASE NUMBER */}
-
-                            <td>
-                              <strong>
-                                {getPurchaseNumber(
-                                  purchase
-                                )}
-                              </strong>
-                            </td>
-
-                            {/* SUPPLIER */}
-
-                            <td>
-                              {supplier?.name ||
-                                "-"}
-                            </td>
-
-                            {/* BRANCH */}
-
-                            <td>
-                              {branch?.name ||
-                                "-"}
-                            </td>
-
-                            {/* CREATED BY */}
-
-                            <td>
-                              <strong>
-                                {createdBy}
-                              </strong>
-                            </td>
-
-                            {/* ITEMS */}
-
-                            <td>
-
-                              {items.length > 0 ? (
-
-                                <div>
-
-                                  <Badge
-                                    bg="light"
-                                    text="dark"
-                                    className="mb-2"
-                                  >
-                                    {
-                                      items.length
-                                    }{" "}
-                                    product
-                                    {items.length !== 1
-                                      ? "s"
-                                      : ""}
-                                  </Badge>
-
-                                  <div
-                                    style={{
-                                      minWidth:
-                                        "300px",
-                                    }}
-                                  >
-
-                                    {items.map(
-                                      (
-                                        item,
-                                        index
-                                      ) => (
-
-                                        <div
-                                          key={
-                                            item.id ??
-                                            index
-                                          }
-                                          className="border-bottom py-1"
-                                        >
-
-                                          <div className="d-flex justify-content-between">
-
-                                            <strong>
-                                              {getProductName(
-                                                item
-                                              )}
-                                            </strong>
-
-                                            <span>
-                                              x{" "}
-                                              {
-                                                item.quantity
-                                              }
-                                            </span>
-
-                                          </div>
-
-                                          <small className="text-muted">
-
-                                            Unit:
-                                            {" "}
-                                            {formatCurrency(
-                                              item.unit_cost
-                                            )}
-
-                                            {" | "}
-
-                                            Discount:
-                                            {" "}
-                                            {toNumber(
-                                              item.discount
-                                            )}
-                                            %
-
-                                            {" | "}
-
-                                            Tax:
-                                            {" "}
-                                            {toNumber(
-                                              item.tax
-                                            )}
-                                            %
-
-                                          </small>
-
-                                          <div>
-
-                                            <small>
-
-                                              Total:
-                                              {" "}
-
-                                              <strong>
-                                                {formatCurrency(
-                                                  item.total
-                                                )}
-                                              </strong>
-
-                                            </small>
-
-                                          </div>
-
-                                        </div>
-
-                                      )
-                                    )}
-
-                                  </div>
-
-                                </div>
-
-                              ) : (
-
-                                <Badge
-                                  bg="secondary"
-                                >
-                                  No items
-                                </Badge>
-
-                              )}
-
-                            </td>
-
-                            {/* TOTAL */}
-
-                            <td>
-                              <strong>
-                                {formatCurrency(
-                                  total
-                                )}
-                              </strong>
-                            </td>
-
-                            {/* STATUS */}
-
-                            <td>
-
-                              <Badge
-                                bg={getStatusVariant(
-                                  status
-                                )}
-                              >
-                                {getStatusLabel(
-                                  status
-                                )}
-                              </Badge>
-
-                            </td>
-
-                            {/* PAYMENT */}
-
-                            <td>
-
-                              <Badge
-                                bg={getPaymentStatusVariant(
-                                  paymentStatus
-                                )}
-                              >
-                                {getPaymentStatusLabel(
-                                  paymentStatus
-                                )}
-                              </Badge>
-
-                            </td>
-
-                            {/* ACTION */}
-
-                            <td>
-
-                              <div className="d-flex gap-2">
-
-                                {/* EDIT */}
-
-                                <Button
-                                  type="button"
-                                  variant="outline-primary"
-                                  size="sm"
-                                  disabled={
-                                    saving
-                                  }
-                                  onClick={() =>
-                                    handleEdit(
-                                      purchase
-                                    )
-                                  }
-                                  title="Edit Purchase"
-                                >
-                                  <i className="bi bi-pencil" />
-                                </Button>
-
-                                {/* DELETE */}
-
-                                <Button
-                                  type="button"
-                                  variant="outline-danger"
-                                  size="sm"
-                                  disabled={
-                                    saving
-                                  }
-                                  onClick={() =>
-                                    handleDelete(
-                                      purchase.id
-                                    )
-                                  }
-                                  title="Delete Purchase"
-                                >
-                                  <i className="bi bi-trash" />
-                                </Button>
-
-                              </div>
-
-                            </td>
-
-                          </tr>
-
-                        );
-                      }
-                    )
-
-                  )}
-
-                </tbody>
-
-              </Table>
-
-            </div>
-
-          )}
+          </Row>
 
         </Card.Body>
 
       </Card>
 
-      {/* ==================================================
-          PURCHASE MODAL
-      ================================================== */}
+      {/* =====================================================
+          PRODUCTS TABLE
+      ===================================================== */}
 
-      <PurchaseModal
+      <Card>
+
+        <Card.Body className="p-0">
+
+          <div className="table-responsive">
+
+            <Table
+              hover
+              bordered
+              className="mb-0 align-middle"
+            >
+
+              <thead className="table-light">
+
+                <tr>
+
+                  <th>
+                    PRODUCT
+                  </th>
+
+                  <th>
+                    SKU
+                  </th>
+
+                  <th>
+                    BRAND
+                  </th>
+
+                  <th>
+                    CATEGORY
+                  </th>
+
+                  <th>
+                    SUPPLIER
+                  </th>
+
+                  <th>
+                    CREATED BY
+                  </th>
+
+                  {/* COST PRICE
+                      ONLY AUTHORIZED USERS */}
+                  {canViewCostPrice && (
+                    <th>
+                      COST PRICE
+                    </th>
+                  )}
+
+                  {/* SELLING PRICE
+                      EVERYONE CAN SEE */}
+                  <th>
+                    SELLING PRICE
+                  </th>
+
+                  <th>
+                    STOCK
+                  </th>
+
+                  <th>
+                    STATUS
+                  </th>
+
+                  <th>
+                    ACTION
+                  </th>
+
+                </tr>
+
+              </thead>
+
+              <tbody>
+
+                {loading ? (
+
+                  <tr>
+
+                    <td
+                      colSpan={
+                        tableColumnCount
+                      }
+                      className="text-center py-5"
+                    >
+
+                      <Spinner
+                        animation="border"
+                        size="sm"
+                      />
+
+                      <span className="ms-2">
+                        Loading products...
+                      </span>
+
+                    </td>
+
+                  </tr>
+
+                ) : filteredProducts.length ===
+                  0 ? (
+
+                  <tr>
+
+                    <td
+                      colSpan={
+                        tableColumnCount
+                      }
+                      className="text-center py-5 text-muted"
+                    >
+                      No products found.
+                    </td>
+
+                  </tr>
+
+                ) : (
+
+                  filteredProducts.map(
+                    (product) => {
+
+                      const stock =
+                        getProductStock(
+                          product
+                        );
+
+                      return (
+                        <tr
+                          key={
+                            product.id
+                          }
+                        >
+
+                          {/* PRODUCT */}
+                          <td>
+                            <strong>
+                              {
+                                product?.name ||
+                                "-"
+                              }
+                            </strong>
+                          </td>
+
+                          {/* SKU */}
+                          <td>
+                            {
+                              product?.sku ||
+                              "-"
+                            }
+                          </td>
+
+                          {/* BRAND */}
+                          <td>
+                            {getName(
+                              product?.brand
+                            )}
+                          </td>
+
+                          {/* CATEGORY */}
+                          <td>
+                            {getName(
+                              product?.category
+                            )}
+                          </td>
+
+                          {/* SUPPLIER */}
+                          <td>
+                            {getName(
+                              product?.supplier
+                            )}
+                          </td>
+
+                          {/* CREATED BY */}
+                          <td>
+                            {getName(
+                              product?.created_by
+                            )}
+                          </td>
+
+                          {/* COST PRICE */}
+                          {canViewCostPrice && (
+                            <td>
+                              {formatCurrency(
+                                product?.cost_price
+                              )}
+                            </td>
+                          )}
+
+                          {/* SELLING PRICE */}
+                          <td>
+                            <strong>
+                              {formatCurrency(
+                                product?.price
+                              )}
+                            </strong>
+                          </td>
+
+                          {/* STOCK */}
+                          <td>
+                            {stock}
+                          </td>
+
+                          {/* STATUS */}
+                          <td>
+                            {getStatusBadge(
+                              product
+                            )}
+                          </td>
+
+                          {/* ACTION */}
+                          <td>
+
+                            <div className="d-flex gap-2">
+
+                              <Button
+                                size="sm"
+                                variant="outline-primary"
+                                onClick={() =>
+                                  handleShowEdit(
+                                    product
+                                  )
+                                }
+                              >
+                                Edit
+                              </Button>
+
+                              <Button
+                                size="sm"
+                                variant="outline-danger"
+                                onClick={() =>
+                                  handleShowDelete(
+                                    product
+                                  )
+                                }
+                              >
+                                Delete
+                              </Button>
+
+                            </div>
+
+                          </td>
+
+                        </tr>
+                      );
+                    }
+                  )
+
+                )}
+
+              </tbody>
+
+            </Table>
+
+          </div>
+
+        </Card.Body>
+
+      </Card>
+
+      {/* =====================================================
+          ADD / EDIT PRODUCT MODAL
+      ===================================================== */}
+
+      <Modal
         show={showModal}
+        onHide={() => {
+          if (!saving) {
+            setShowModal(false);
+          }
+        }}
+        size="lg"
+        centered
+      >
 
-        onHide={
-          handleCloseModal
-        }
+        <Form
+          onSubmit={handleSubmit}
+        >
 
-        products={products}
+          <Modal.Header closeButton>
 
-        suppliers={suppliers}
+            <Modal.Title>
+              {editingProduct
+                ? "Edit Product"
+                : "Add Product"}
+            </Modal.Title>
 
-        branches={branches}
+          </Modal.Header>
 
-        purchase={
-          editingPurchase
-        }
+          <Modal.Body>
 
-        editing={
-          Boolean(
-            editingPurchase
-          )
-        }
+            <Row className="g-3">
 
-        onSave={handleSave}
+              {/* PRODUCT NAME */}
+              <Col md={6}>
 
-        saving={saving}
-      />
+                <Form.Group>
+
+                  <Form.Label>
+                    Product Name
+                  </Form.Label>
+
+                  <Form.Control
+                    type="text"
+                    name="name"
+                    value={
+                      formData.name
+                    }
+                    onChange={
+                      handleChange
+                    }
+                    required
+                  />
+
+                </Form.Group>
+
+              </Col>
+
+              {/* SKU */}
+              <Col md={6}>
+
+                <Form.Group>
+
+                  <Form.Label>
+                    SKU
+                  </Form.Label>
+
+                  <Form.Control
+                    type="text"
+                    name="sku"
+                    value={
+                      formData.sku
+                    }
+                    onChange={
+                      handleChange
+                    }
+                    required
+                  />
+
+                </Form.Group>
+
+              </Col>
+
+              {/* BRAND */}
+              <Col md={4}>
+
+                <Form.Group>
+
+                  <Form.Label>
+                    Brand
+                  </Form.Label>
+
+                  <Form.Control
+                    type="text"
+                    name="brand"
+                    value={
+                      formData.brand
+                    }
+                    onChange={
+                      handleChange
+                    }
+                    placeholder="Brand ID"
+                  />
+
+                </Form.Group>
+
+              </Col>
+
+              {/* CATEGORY */}
+              <Col md={4}>
+
+                <Form.Group>
+
+                  <Form.Label>
+                    Category
+                  </Form.Label>
+
+                  <Form.Control
+                    type="text"
+                    name="category"
+                    value={
+                      formData.category
+                    }
+                    onChange={
+                      handleChange
+                    }
+                    placeholder="Category ID"
+                  />
+
+                </Form.Group>
+
+              </Col>
+
+              {/* SUPPLIER */}
+              <Col md={4}>
+
+                <Form.Group>
+
+                  <Form.Label>
+                    Supplier
+                  </Form.Label>
+
+                  <Form.Control
+                    type="text"
+                    name="supplier"
+                    value={
+                      formData.supplier
+                    }
+                    onChange={
+                      handleChange
+                    }
+                    placeholder="Supplier ID"
+                  />
+
+                </Form.Group>
+
+              </Col>
+
+              {/* COST PRICE
+                  NOT SHOWN TO CASHIER */}
+              {canViewCostPrice && (
+                <Col md={4}>
+
+                  <Form.Group>
+
+                    <Form.Label>
+                      Cost Price
+                    </Form.Label>
+
+                    <Form.Control
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      name="cost_price"
+                      value={
+                        formData.cost_price
+                      }
+                      onChange={
+                        handleChange
+                      }
+                    />
+
+                    <Form.Text className="text-muted">
+                      Purchase/cost price.
+                    </Form.Text>
+
+                  </Form.Group>
+
+                </Col>
+              )}
+
+              {/* SELLING PRICE
+                  VISIBLE TO CASHIER */}
+              <Col md={4}>
+
+                <Form.Group>
+
+                  <Form.Label>
+                    Selling Price
+                  </Form.Label>
+
+                  <Form.Control
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    name="price"
+                    value={
+                      formData.price
+                    }
+                    onChange={
+                      handleChange
+                    }
+                    required
+                  />
+
+                </Form.Group>
+
+              </Col>
+
+              {/* STOCK */}
+              <Col md={4}>
+
+                <Form.Group>
+
+                  <Form.Label>
+                    Stock
+                  </Form.Label>
+
+                  <Form.Control
+                    type="number"
+                    min="0"
+                    name="stock"
+                    value={
+                      formData.stock
+                    }
+                    onChange={
+                      handleChange
+                    }
+                  />
+
+                </Form.Group>
+
+              </Col>
+
+              {/* MINIMUM STOCK */}
+              <Col md={4}>
+
+                <Form.Group>
+
+                  <Form.Label>
+                    Minimum Stock
+                  </Form.Label>
+
+                  <Form.Control
+                    type="number"
+                    min="0"
+                    name="min_stock"
+                    value={
+                      formData.min_stock
+                    }
+                    onChange={
+                      handleChange
+                    }
+                  />
+
+                </Form.Group>
+
+              </Col>
+
+            </Row>
+
+          </Modal.Body>
+
+          <Modal.Footer>
+
+            <Button
+              variant="secondary"
+              onClick={() =>
+                setShowModal(false)
+              }
+              disabled={saving}
+            >
+              Cancel
+            </Button>
+
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={saving}
+            >
+
+              {saving ? (
+                <>
+                  <Spinner
+                    animation="border"
+                    size="sm"
+                    className="me-2"
+                  />
+
+                  Saving...
+                </>
+              ) : editingProduct ? (
+                "Update Product"
+              ) : (
+                "Save Product"
+              )}
+
+            </Button>
+
+          </Modal.Footer>
+
+        </Form>
+
+      </Modal>
+
+      {/* =====================================================
+          DELETE MODAL
+      ===================================================== */}
+
+      <Modal
+        show={showDeleteModal}
+        onHide={() => {
+          if (!saving) {
+            setShowDeleteModal(
+              false
+            );
+          }
+        }}
+        centered
+      >
+
+        <Modal.Header closeButton>
+
+          <Modal.Title>
+            Delete Product
+          </Modal.Title>
+
+        </Modal.Header>
+
+        <Modal.Body>
+
+          Are you sure you want to
+          delete{" "}
+
+          <strong>
+            {
+              deletingProduct?.name ||
+              "this product"
+            }
+          </strong>
+          ?
+
+        </Modal.Body>
+
+        <Modal.Footer>
+
+          <Button
+            variant="secondary"
+            onClick={() =>
+              setShowDeleteModal(
+                false
+              )
+            }
+            disabled={saving}
+          >
+            Cancel
+          </Button>
+
+          <Button
+            variant="danger"
+            onClick={
+              handleDelete
+            }
+            disabled={saving}
+          >
+
+            {saving ? (
+              <>
+                <Spinner
+                  animation="border"
+                  size="sm"
+                  className="me-2"
+                />
+
+                Deleting...
+              </>
+            ) : (
+              "Delete"
+            )}
+
+          </Button>
+
+        </Modal.Footer>
+
+      </Modal>
 
     </div>
   );
 };
 
-export default Purchases;
+export default Products;
+
