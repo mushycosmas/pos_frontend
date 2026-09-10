@@ -1,3 +1,4 @@
+
 import React, {
   useEffect,
   useMemo,
@@ -26,11 +27,25 @@ import brandsApi from "../services/brandsApi";
 import categoriesApi from "../services/categoriesApi";
 import suppliersApi from "../services/suppliersApi";
 
+import { useAuth } from "../context/AuthContext";
+
 // ==========================================================
 // PRODUCTS PAGE
 // ==========================================================
 
 const Products = () => {
+
+  // ========================================================
+  // PERMISSIONS
+  // ========================================================
+
+  const { hasPermission } = useAuth();
+
+  const canEditProduct =
+    hasPermission("products.change_product");
+
+  const canDeleteProduct =
+    hasPermission("products.delete_product");
 
   // ========================================================
   // STATE
@@ -1609,34 +1624,42 @@ const Products = () => {
 
                                 <Dropdown.Menu>
 
-                                  <Dropdown.Item
-                                    onClick={() =>
-                                      handleEdit(
-                                        product
-                                      )
-                                    }
-                                  >
+                                  {canEditProduct && (
 
-                                    <i className="bi bi-pencil me-2" />
+                                    <Dropdown.Item
+                                      onClick={() =>
+                                        handleEdit(
+                                          product
+                                        )
+                                      }
+                                    >
 
-                                    Edit
+                                      <i className="bi bi-pencil me-2" />
 
-                                  </Dropdown.Item>
+                                      Edit
 
-                                  <Dropdown.Item
-                                    className="text-danger"
-                                    onClick={() =>
-                                      handleDelete(
-                                        product.id
-                                      )
-                                    }
-                                  >
+                                    </Dropdown.Item>
 
-                                    <i className="bi bi-trash me-2" />
+                                  )}
 
-                                    Delete
+                                  {canDeleteProduct && (
 
-                                  </Dropdown.Item>
+                                    <Dropdown.Item
+                                      className="text-danger"
+                                      onClick={() =>
+                                        handleDelete(
+                                          product.id
+                                        )
+                                      }
+                                    >
+
+                                      <i className="bi bi-trash me-2" />
+
+                                      Delete
+
+                                    </Dropdown.Item>
+
+                                  )}
 
                                 </Dropdown.Menu>
 
@@ -1699,3 +1722,4 @@ const Products = () => {
 };
 
 export default Products;
+

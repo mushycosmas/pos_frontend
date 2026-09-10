@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState, useEffect } from "react";
 
 import {
@@ -16,6 +17,7 @@ import {
 } from "react-bootstrap";
 
 import { useInventory } from "../context/InventoryContext";
+import { useAuth } from "../context/AuthContext";
 
 const StockAdjustments = () => {
   const {
@@ -26,6 +28,8 @@ const StockAdjustments = () => {
     loadStockMovements,
     loading,
   } = useInventory();
+
+  const { hasPermission } = useAuth();
 
   // =========================================================
   // STATE
@@ -45,6 +49,14 @@ const StockAdjustments = () => {
     notes: "",
     reference: "",
   });
+
+  // =========================================================
+  // DELETE PERMISSION
+  // =========================================================
+
+  const canDeleteStockAdjustment = hasPermission(
+    "inventory.delete_stockmovement"
+  );
 
   // =========================================================
   // REASONS
@@ -264,8 +276,14 @@ const StockAdjustments = () => {
 
     const quantity = Number(formData.quantity);
 
-    if (!Number.isFinite(quantity) || !Number.isInteger(quantity) || quantity <= 0) {
-      setError("Please enter a valid whole-number quantity greater than zero.");
+    if (
+      !Number.isFinite(quantity) ||
+      !Number.isInteger(quantity) ||
+      quantity <= 0
+    ) {
+      setError(
+        "Please enter a valid whole-number quantity greater than zero."
+      );
       return;
     }
 
@@ -369,10 +387,6 @@ const StockAdjustments = () => {
   // =========================================================
 
   const getNewStock = (item) => {
-    // -------------------------------------------------------
-    // Backend calculated value
-    // -------------------------------------------------------
-
     if (item.new_quantity !== undefined && item.new_quantity !== null) {
       return Number(item.new_quantity).toLocaleString();
     }
@@ -393,10 +407,6 @@ const StockAdjustments = () => {
       return Number(item.after_quantity).toLocaleString();
     }
 
-    // -------------------------------------------------------
-    // Find current product
-    // -------------------------------------------------------
-
     const product = getProductByProductId(item.productId);
 
     if (!product) {
@@ -409,10 +419,6 @@ const StockAdjustments = () => {
 
     const quantity = Number(item.quantity || 0);
     const movementType = item.movement_type || item.type;
-
-    // -------------------------------------------------------
-    // Fallback only - Backend should be the source of truth
-    // -------------------------------------------------------
 
     if (movementType === "ADD" || movementType === "IN") {
       return (currentStock + quantity).toLocaleString();
@@ -431,12 +437,15 @@ const StockAdjustments = () => {
 
   const getBadgeVariant = (type) => {
     const normalizedType = type?.toUpperCase();
+
     if (normalizedType === "ADD" || normalizedType === "IN") {
       return "success";
     }
+
     if (normalizedType === "REMOVE" || normalizedType === "OUT") {
       return "danger";
     }
+
     return "secondary";
   };
 
@@ -446,12 +455,15 @@ const StockAdjustments = () => {
 
   const getTypeLabel = (type) => {
     const normalizedType = type?.toUpperCase();
+
     if (normalizedType === "ADD" || normalizedType === "IN") {
       return "Added";
     }
+
     if (normalizedType === "REMOVE" || normalizedType === "OUT") {
       return "Removed";
     }
+
     return type || "Unknown";
   };
 
@@ -492,6 +504,7 @@ const StockAdjustments = () => {
 
   const formatDate = (date) => {
     if (!date) return "-";
+
     try {
       return new Date(date).toLocaleString();
     } catch {
@@ -575,6 +588,7 @@ const StockAdjustments = () => {
                 <InputGroup.Text>
                   <i className="bi bi-search"></i>
                 </InputGroup.Text>
+
                 <Form.Control
                   placeholder="Search product, SKU or reason..."
                   value={search}
@@ -598,7 +612,10 @@ const StockAdjustments = () => {
           {loading ? (
             <div className="text-center py-5">
               <Spinner animation="border" variant="primary" />
-              <div className="mt-2 text-muted">Loading adjustments...</div>
+
+              <div className="mt-2 text-muted">
+                Loading adjustments...
+              </div>
             </div>
           ) : (
             <Table hover responsive className="align-middle">
@@ -611,15 +628,24 @@ const StockAdjustments = () => {
                   <th>REASON</th>
                   <th>NEW STOCK</th>
                   <th>DATE</th>
-                  <th></th>
+
+                  {/* DELETE COLUMN ONLY WHEN PERMITTED */}
+                  {canDeleteStockAdjustment && <th></th>}
                 </tr>
               </thead>
 
               <tbody>
                 {filteredAdjustments.length === 0 ? (
                   <tr>
-                    <td colSpan="8" className="text-center py-5">
-                      <i className="bi bi-sliders" style={{ fontSize: "32px" }}></i>
+                    <td
+                      colSpan={canDeleteStockAdjustment ? 8 : 7}
+                      className="text-center py-5"
+                    >
+                      <i
+                        className="bi bi-sliders"
+                        style={{ fontSize: "32px" }}
+                      ></i>
+
                       <div className="mt-2 text-muted">
                         No stock adjustments found.
                       </div>
@@ -630,7 +656,8 @@ const StockAdjustments = () => {
                     const product = getProductByProductId(item.productId);
 
                     const quantity = Number(item.quantity || 0);
-                    const movementType = item.movement_type || item.type;
+                    const movementType =
+                      item.movement_type || item.type;
 
                     const productName =
                       product?.name ||
@@ -645,33 +672,65 @@ const StockAdjustments = () => {
                       item.product_sku ||
                       "-";
 
-                    const date = item.created_at || item.createdAt || item.date;
+                    const date =
+                      item.created_at ||
+                      item.createdAt ||
+                      item.date;
 
                     return (
                       <tr key={item.id || item._id}>
                         <td>
                           <strong>{productName}</strong>
                         </td>
+
                         <td>{sku}</td>
+
                         <td>
-                          <Badge bg={getBadgeVariant(movementType)}>
+                          <Badge
+                            bg={getBadgeVariant(movementType)}
+                          >
                             {getTypeLabel(movementType)}
                           </Badge>
                         </td>
-                        <td>{quantity.toLocaleString()}</td>
-                        <td>{item.reason || item.notes || "-"}</td>
-                        <td>{getNewStock(item)}</td>
-                        <td>{formatDate(date)}</td>
+
                         <td>
-                          <Button
-                            variant="outline-danger"
-                            size="sm"
-                            onClick={() => handleDelete(item.id || item._id)}
-                            disabled={saving}
-                          >
-                            <i className="bi bi-trash"></i>
-                          </Button>
+                          {quantity.toLocaleString()}
                         </td>
+
+                        <td>
+                          {item.reason ||
+                            item.notes ||
+                            "-"}
+                        </td>
+
+                        <td>
+                          {getNewStock(item)}
+                        </td>
+
+                        <td>
+                          {formatDate(date)}
+                        </td>
+
+                        {/* =================================================
+                            DELETE BUTTON - PERMISSION CONTROL ONLY
+                        ================================================== */}
+
+                        {canDeleteStockAdjustment && (
+                          <td>
+                            <Button
+                              variant="outline-danger"
+                              size="sm"
+                              onClick={() =>
+                                handleDelete(
+                                  item.id || item._id
+                                )
+                              }
+                              disabled={saving}
+                            >
+                              <i className="bi bi-trash"></i>
+                            </Button>
+                          </td>
+                        )}
                       </tr>
                     );
                   })
@@ -694,7 +753,11 @@ const StockAdjustments = () => {
         <Form onSubmit={handleSubmit}>
           <Modal.Body>
             {error && (
-              <Alert variant="danger" dismissible onClose={() => setError("")}>
+              <Alert
+                variant="danger"
+                dismissible
+                onClose={() => setError("")}
+              >
                 {error}
               </Alert>
             )}
@@ -703,15 +766,22 @@ const StockAdjustments = () => {
               <Col md={6}>
                 <Form.Group className="mb-3">
                   <Form.Label>Product *</Form.Label>
+
                   <Form.Select
                     name="productId"
                     value={formData.productId}
                     onChange={handleChange}
                     required
                   >
-                    <option value="">Select a product...</option>
+                    <option value="">
+                      Select a product...
+                    </option>
+
                     {products.map((product) => (
-                      <option key={product.productId} value={product.productId}>
+                      <option
+                        key={product.productId}
+                        value={product.productId}
+                      >
                         {product.name} - {product.sku}
                       </option>
                     ))}
@@ -721,15 +791,23 @@ const StockAdjustments = () => {
 
               <Col md={6}>
                 <Form.Group className="mb-3">
-                  <Form.Label>Adjustment Type *</Form.Label>
+                  <Form.Label>
+                    Adjustment Type *
+                  </Form.Label>
+
                   <Form.Select
                     name="type"
                     value={formData.type}
                     onChange={handleChange}
                     required
                   >
-                    <option value="ADD">Add Stock (+)</option>
-                    <option value="REMOVE">Remove Stock (-)</option>
+                    <option value="ADD">
+                      Add Stock (+)
+                    </option>
+
+                    <option value="REMOVE">
+                      Remove Stock (-)
+                    </option>
                   </Form.Select>
                 </Form.Group>
               </Col>
@@ -738,7 +816,10 @@ const StockAdjustments = () => {
             <Row>
               <Col md={6}>
                 <Form.Group className="mb-3">
-                  <Form.Label>Quantity *</Form.Label>
+                  <Form.Label>
+                    Quantity *
+                  </Form.Label>
+
                   <Form.Control
                     type="number"
                     name="quantity"
@@ -754,7 +835,10 @@ const StockAdjustments = () => {
 
               <Col md={6}>
                 <Form.Group className="mb-3">
-                  <Form.Label>Reference</Form.Label>
+                  <Form.Label>
+                    Reference
+                  </Form.Label>
+
                   <Form.Control
                     type="text"
                     name="reference"
@@ -767,16 +851,25 @@ const StockAdjustments = () => {
             </Row>
 
             <Form.Group className="mb-3">
-              <Form.Label>Reason *</Form.Label>
+              <Form.Label>
+                Reason *
+              </Form.Label>
+
               <Form.Select
                 name="reason"
                 value={formData.reason}
                 onChange={handleChange}
                 required
               >
-                <option value="">Select a reason...</option>
+                <option value="">
+                  Select a reason...
+                </option>
+
                 {reasons.map((reason) => (
-                  <option key={reason.value} value={reason.value}>
+                  <option
+                    key={reason.value}
+                    value={reason.value}
+                  >
                     {reason.label}
                   </option>
                 ))}
@@ -784,7 +877,10 @@ const StockAdjustments = () => {
             </Form.Group>
 
             <Form.Group className="mb-3">
-              <Form.Label>Notes</Form.Label>
+              <Form.Label>
+                Notes
+              </Form.Label>
+
               <Form.Control
                 as="textarea"
                 rows={2}
@@ -798,37 +894,71 @@ const StockAdjustments = () => {
             {selectedProduct && (
               <Alert variant="info" className="mb-0">
                 <strong>Current Stock:</strong>{" "}
-                {selectedProduct.stock || selectedProduct.quantity || 0} units
-                {formData.type === "REMOVE" && formData.quantity && (
-                  <>
-                    {" "}
-                    → <strong>New Stock:</strong>{" "}
-                    {Math.max(
-                      0,
-                      (selectedProduct.stock || selectedProduct.quantity || 0) -
-                        Number(formData.quantity)
-                    )}{" "}
-                    units
-                  </>
-                )}
-                {formData.type === "ADD" && formData.quantity && (
-                  <>
-                    {" "}
-                    → <strong>New Stock:</strong>{" "}
-                    {(selectedProduct.stock || selectedProduct.quantity || 0) +
-                      Number(formData.quantity)}{" "}
-                    units
-                  </>
-                )}
+                {selectedProduct.stock ||
+                  selectedProduct.quantity ||
+                  0}{" "}
+                units
+
+                {formData.type === "REMOVE" &&
+                  formData.quantity && (
+                    <>
+                      {" "}
+                      →{" "}
+                      <strong>
+                        New Stock:
+                      </strong>{" "}
+                      {Math.max(
+                        0,
+                        (
+                          selectedProduct.stock ||
+                          selectedProduct.quantity ||
+                          0
+                        ) -
+                          Number(
+                            formData.quantity
+                          )
+                      )}{" "}
+                      units
+                    </>
+                  )}
+
+                {formData.type === "ADD" &&
+                  formData.quantity && (
+                    <>
+                      {" "}
+                      →{" "}
+                      <strong>
+                        New Stock:
+                      </strong>{" "}
+                      {(
+                        selectedProduct.stock ||
+                        selectedProduct.quantity ||
+                        0
+                      ) +
+                        Number(
+                          formData.quantity
+                        )}{" "}
+                      units
+                    </>
+                  )}
               </Alert>
             )}
           </Modal.Body>
 
           <Modal.Footer>
-            <Button variant="secondary" onClick={handleClose} disabled={saving}>
+            <Button
+              variant="secondary"
+              onClick={handleClose}
+              disabled={saving}
+            >
               Cancel
             </Button>
-            <Button variant="primary" type="submit" disabled={saving}>
+
+            <Button
+              variant="primary"
+              type="submit"
+              disabled={saving}
+            >
               {saving ? (
                 <>
                   <Spinner
@@ -837,6 +967,7 @@ const StockAdjustments = () => {
                     size="sm"
                     className="me-2"
                   />
+
                   Processing...
                 </>
               ) : (
@@ -851,3 +982,4 @@ const StockAdjustments = () => {
 };
 
 export default StockAdjustments;
+
