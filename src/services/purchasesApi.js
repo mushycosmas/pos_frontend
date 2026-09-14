@@ -65,6 +65,18 @@ const purchasesApi = {
 
     return true;
   },
+
+  // ==========================================================
+  // RECEIVE PURCHASE
+  // ==========================================================
+  receive: async (id, data = {}) => {
+    const response = await api.post(
+      `/purchases/${id}/receive/`,
+      data
+    );
+
+    return response.data;
+  },
 };
 
 export default purchasesApi;
