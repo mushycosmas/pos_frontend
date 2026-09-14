@@ -1,8 +1,9 @@
+
 import React, {
   useEffect,
   useMemo,
   useState,
-} from 'react';
+} from "react";
 
 import {
   Card,
@@ -16,36 +17,142 @@ import {
   Col,
   Spinner,
   Alert,
-} from 'react-bootstrap';
+} from "react-bootstrap";
 
-import SupplierModal
-  from '../components/inventory/SupplierModal';
+import SupplierModal from "../components/inventory/SupplierModal";
+import suppliersApi from "../services/suppliersApi";
+import { useInventory } from "../context/InventoryContext";
+import { useAuth } from "../context/AuthContext";
 
-import suppliersApi
-  from '../services/suppliersApi';
 
-import { useInventory }
-  from '../context/InventoryContext';
+// =========================================================
+// HELPERS
+// =========================================================
 
+const getRoleName = (user) => {
+  if (!user) {
+    return "";
+  }
+
+  const role = user.role;
+
+  if (typeof role === "string") {
+    return role.trim().toLowerCase();
+  }
+
+  if (role && typeof role === "object") {
+    return String(
+      role.name ??
+      role.code ??
+      ""
+    )
+      .trim()
+      .toLowerCase();
+  }
+
+  return String(
+    user.role_name ??
+    user.roleName ??
+    ""
+  )
+    .trim()
+    .toLowerCase();
+};
+
+
+const getSupplierName = (supplier) => {
+  return (
+    supplier?.name ??
+    supplier?.supplier_name ??
+    supplier?.supplierName ??
+    "-"
+  );
+};
+
+
+const getSupplierPhone = (supplier) => {
+  return (
+    supplier?.phone ??
+    supplier?.mobile ??
+    supplier?.contact_phone ??
+    "-"
+  );
+};
+
+
+const getSupplierEmail = (supplier) => {
+  return (
+    supplier?.email ??
+    "-"
+  );
+};
+
+
+const getSupplierAddress = (supplier) => {
+  return (
+    supplier?.address ??
+    "-"
+  );
+};
+
+
+const getSupplierStatus = (supplier) => {
+  if (
+    supplier?.is_active === true ||
+    supplier?.is_active === 1
+  ) {
+    return "Active";
+  }
+
+  if (
+    supplier?.is_active === false ||
+    supplier?.is_active === 0
+  ) {
+    return "Inactive";
+  }
+
+  if (
+    String(
+      supplier?.status ?? ""
+    ).toLowerCase() === "active"
+  ) {
+    return "Active";
+  }
+
+  return "Inactive";
+};
+
+
+// =========================================================
+// COMPONENT
+// =========================================================
 
 const Suppliers = () => {
 
-  /*
-  |--------------------------------------------------------------------------
-  | Inventory Context
-  |--------------------------------------------------------------------------
-  */
+  // =======================================================
+  // AUTH
+  // =======================================================
+
+  const { user } = useAuth();
+
+  const roleName = getRoleName(user);
+
+  const isCashier =
+    roleName === "cashier";
+
+
+  // =======================================================
+  // INVENTORY
+  // =======================================================
 
   const {
     products = [],
   } = useInventory();
 
 
-  /*
-  |--------------------------------------------------------------------------
-  | State
-  |--------------------------------------------------------------------------
-  */
+  // =======================================================
+  // STATE
+  // =======================================================
 
   const [suppliers, setSuppliers] =
     useState([]);
@@ -57,10 +164,10 @@ const Suppliers = () => {
     useState(false);
 
   const [error, setError] =
-    useState('');
+    useState("");
 
   const [search, setSearch] =
-    useState('');
+    useState("");
 
   const [showModal, setShowModal] =
     useState(false);
@@ -69,11 +176,9 @@ const Suppliers = () => {
     useState(null);
 
 
-  /*
-  |--------------------------------------------------------------------------
-  | Load Suppliers
-  |--------------------------------------------------------------------------
-  */
+  // =======================================================
+  // LOAD SUPPLIERS
+  // =======================================================
 
   const loadSuppliers = async () => {
 
@@ -81,23 +186,10 @@ const Suppliers = () => {
 
       setLoading(true);
 
-      setError('');
+      setError("");
 
       const data =
         await suppliersApi.getAll();
-
-      /*
-       * DRF can return either:
-       *
-       * [...]
-       *
-       * OR:
-       *
-       * {
-       *   count: 10,
-       *   results: [...]
-       * }
-       */
 
       const supplierData =
         Array.isArray(data)
@@ -111,13 +203,14 @@ const Suppliers = () => {
     } catch (err) {
 
       console.error(
-        'Failed to fetch suppliers:',
+        "Failed to fetch suppliers:",
         err
       );
 
       setError(
         err?.response?.data?.detail ||
-        'Failed to load suppliers. Please try again.'
+        err?.response?.data?.message ||
+        "Failed to load suppliers. Please try again."
       );
 
     } finally {
@@ -125,15 +218,12 @@ const Suppliers = () => {
       setLoading(false);
 
     }
-
   };
 
 
-  /*
-  |--------------------------------------------------------------------------
-  | Load on page start
-  |--------------------------------------------------------------------------
-  */
+  // =======================================================
+  // LOAD ON PAGE START
+  // =======================================================
 
   useEffect(() => {
 
@@ -142,11 +232,9 @@ const Suppliers = () => {
   }, []);
 
 
-  /*
-  |--------------------------------------------------------------------------
-  | Product Count
-  |--------------------------------------------------------------------------
-  */
+  // =======================================================
+  // PRODUCT COUNT
+  // =======================================================
 
   const getProductCount = (supplierId) => {
 
@@ -154,32 +242,31 @@ const Suppliers = () => {
       (product) => {
 
         const productSupplier =
-          product.supplierId ??
-          product.supplier_id ??
-          product.supplier;
+          product?.supplierId ??
+          product?.supplier_id ??
+          product?.supplier?.id ??
+          product?.supplier;
 
         return (
           Number(productSupplier) ===
           Number(supplierId)
         );
-
       }
     ).length;
-
   };
 
 
-  /*
-  |--------------------------------------------------------------------------
-  | Search
-  |--------------------------------------------------------------------------
-  */
+  // =======================================================
+  // FILTER SUPPLIERS
+  // =======================================================
 
   const filteredSuppliers =
     useMemo(() => {
 
       const keyword =
-        search.trim().toLowerCase();
+        search
+          .trim()
+          .toLowerCase();
 
       if (!keyword) {
         return suppliers;
@@ -189,20 +276,32 @@ const Suppliers = () => {
         (supplier) => {
 
           const name =
-            supplier.name?.toLowerCase() ||
-            '';
+            String(
+              getSupplierName(
+                supplier
+              )
+            ).toLowerCase();
 
           const phone =
-            supplier.phone?.toLowerCase() ||
-            '';
+            String(
+              getSupplierPhone(
+                supplier
+              )
+            ).toLowerCase();
 
           const email =
-            supplier.email?.toLowerCase() ||
-            '';
+            String(
+              getSupplierEmail(
+                supplier
+              )
+            ).toLowerCase();
 
           const address =
-            supplier.address?.toLowerCase() ||
-            '';
+            String(
+              getSupplierAddress(
+                supplier
+              )
+            ).toLowerCase();
 
           return (
             name.includes(keyword) ||
@@ -210,93 +309,156 @@ const Suppliers = () => {
             email.includes(keyword) ||
             address.includes(keyword)
           );
-
         }
       );
 
-    }, [suppliers, search]);
+    }, [
+      suppliers,
+      search,
+    ]);
 
 
-  /*
-  |--------------------------------------------------------------------------
-  | Add Supplier
-  |--------------------------------------------------------------------------
-  */
+  // =======================================================
+  // STATISTICS
+  // =======================================================
+
+  const statistics =
+    useMemo(() => {
+
+      const total =
+        suppliers.length;
+
+      const active =
+        suppliers.filter(
+          (supplier) =>
+            getSupplierStatus(
+              supplier
+            ) === "Active"
+        ).length;
+
+      const inactive =
+        suppliers.filter(
+          (supplier) =>
+            getSupplierStatus(
+              supplier
+            ) === "Inactive"
+        ).length;
+
+      const suppliersWithProducts =
+        suppliers.filter(
+          (supplier) =>
+            getProductCount(
+              supplier.id
+            ) > 0
+        ).length;
+
+      return {
+        total,
+        active,
+        inactive,
+        suppliersWithProducts,
+      };
+
+    }, [suppliers, products]);
+
+
+  // =======================================================
+  // ADD SUPPLIER
+  // =======================================================
 
   const handleAdd = () => {
+
+    // Cashier cannot add
+    if (isCashier) {
+      return;
+    }
 
     setEditingSupplier(null);
 
     setShowModal(true);
-
   };
 
 
-  /*
-  |--------------------------------------------------------------------------
-  | Edit Supplier
-  |--------------------------------------------------------------------------
-  */
+  // =======================================================
+  // EDIT SUPPLIER
+  // =======================================================
 
   const handleEdit = (supplier) => {
+
+    // Cashier cannot edit
+    if (isCashier) {
+      return;
+    }
 
     setEditingSupplier(
       supplier
     );
 
     setShowModal(true);
-
   };
 
 
-  /*
-  |--------------------------------------------------------------------------
-  | Save Supplier
-  |--------------------------------------------------------------------------
-  */
+  // =======================================================
+  // CLOSE MODAL
+  // =======================================================
+
+  const handleCloseModal = () => {
+
+    if (saving) {
+      return;
+    }
+
+    setShowModal(false);
+
+    setEditingSupplier(null);
+  };
+
+
+  // =======================================================
+  // SAVE SUPPLIER
+  // =======================================================
 
   const handleSave = async (data) => {
+
+    // Cashier cannot save
+    if (isCashier) {
+      return;
+    }
 
     try {
 
       setSaving(true);
 
-      setError('');
-
-
-      /*
-       * Backend payload.
-       *
-       * Adjust these fields if your
-       * Django Supplier model uses
-       * different field names.
-       */
+      setError("");
 
       const payload = {
 
         name:
-          data.name?.trim(),
+          data?.name?.trim() || "",
 
         phone:
-          data.phone?.trim() || '',
+          data?.phone?.trim() || "",
 
         email:
-          data.email?.trim() || '',
+          data?.email?.trim() || "",
 
         address:
-          data.address?.trim() || '',
+          data?.address?.trim() || "",
 
         is_active:
-          data.is_active ??
-          data.status === 'Active' ??
-          true,
-
+          data?.is_active ??
+          (
+            String(
+              data?.status ?? ""
+            ).toLowerCase() ===
+            "active"
+          ),
       };
 
 
-      /*
-       * UPDATE
-       */
+      // ===================================================
+      // UPDATE
+      // ===================================================
 
       if (editingSupplier) {
 
@@ -307,49 +469,46 @@ const Suppliers = () => {
 
       }
 
-
-      /*
-       * CREATE
-       */
+      // ===================================================
+      // CREATE
+      // ===================================================
 
       else {
 
         await suppliersApi.create(
           payload
         );
-
       }
 
 
-      /*
-       * Close modal
-       */
+      // ===================================================
+      // CLOSE
+      // ===================================================
 
       setShowModal(false);
 
       setEditingSupplier(null);
 
 
-      /*
-       * Reload data
-       */
+      // ===================================================
+      // RELOAD
+      // ===================================================
 
       await loadSuppliers();
 
     } catch (err) {
 
       console.error(
-        'Failed to save supplier:',
+        "Failed to save supplier:",
         err
       );
 
       const backendError =
         err?.response?.data;
 
-
       if (
         backendError &&
-        typeof backendError === 'object'
+        typeof backendError === "object"
       ) {
 
         const firstError =
@@ -357,19 +516,19 @@ const Suppliers = () => {
             backendError
           )
             .flat()
-            .join(' ');
+            .join(" ");
 
         setError(
           firstError ||
-          'Failed to save supplier.'
+          "Failed to save supplier."
         );
 
       } else {
 
         setError(
-          'Failed to save supplier. Please try again.'
+          err?.message ||
+          "Failed to save supplier. Please try again."
         );
-
       }
 
     } finally {
@@ -377,37 +536,39 @@ const Suppliers = () => {
       setSaving(false);
 
     }
-
   };
 
 
-  /*
-  |--------------------------------------------------------------------------
-  | Delete Supplier
-  |--------------------------------------------------------------------------
-  */
+  // =======================================================
+  // DELETE SUPPLIER
+  // =======================================================
 
   const handleDelete = async (id) => {
 
-    /*
-     * Do not delete supplier if
-     * products are still connected.
-     */
+    // Cashier cannot delete
+    if (isCashier) {
+      return;
+    }
+
+
+    // =====================================================
+    // CHECK PRODUCTS
+    // =====================================================
 
     const used =
       products.some(
         (product) => {
 
           const productSupplier =
-            product.supplierId ??
-            product.supplier_id ??
-            product.supplier;
+            product?.supplierId ??
+            product?.supplier_id ??
+            product?.supplier?.id ??
+            product?.supplier;
 
           return (
             Number(productSupplier) ===
             Number(id)
           );
-
         }
       );
 
@@ -415,62 +576,72 @@ const Suppliers = () => {
     if (used) {
 
       alert(
-        'This supplier is assigned to products and cannot be deleted. Move the products to another supplier first.'
+        "This supplier is assigned to products and cannot be deleted. Move the products to another supplier first."
       );
 
       return;
-
     }
 
 
+    // =====================================================
+    // CONFIRM
+    // =====================================================
+
     const confirmed =
       window.confirm(
-        'Are you sure you want to delete this supplier?'
+        "Are you sure you want to delete this supplier?"
       );
-
 
     if (!confirmed) {
       return;
     }
 
 
+    // =====================================================
+    // DELETE
+    // =====================================================
+
     try {
 
-      setError('');
+      setError("");
 
-      await suppliersApi.delete(id);
+      await suppliersApi.delete(
+        id
+      );
 
       await loadSuppliers();
 
     } catch (err) {
 
       console.error(
-        'Failed to delete supplier:',
+        "Failed to delete supplier:",
         err
       );
 
       setError(
         err?.response?.data?.detail ||
-        'Failed to delete supplier.'
+        err?.response?.data?.message ||
+        "Failed to delete supplier."
       );
-
     }
-
   };
 
 
-  /*
-  |--------------------------------------------------------------------------
-  | Toggle Supplier Status
-  |--------------------------------------------------------------------------
-  */
+  // =======================================================
+  // TOGGLE STATUS
+  // =======================================================
 
   const handleToggleStatus =
     async (supplier) => {
 
+      // Cashier cannot activate/deactivate
+      if (isCashier) {
+        return;
+      }
+
       try {
 
-        setError('');
+        setError("");
 
         await suppliersApi.patch(
           supplier.id,
@@ -485,33 +656,30 @@ const Suppliers = () => {
       } catch (err) {
 
         console.error(
-          'Failed to update supplier status:',
+          "Failed to update supplier status:",
           err
         );
 
         setError(
-          'Failed to update supplier status.'
+          err?.response?.data?.detail ||
+          err?.response?.data?.message ||
+          "Failed to update supplier status."
         );
-
       }
-
     };
 
 
-  /*
-  |--------------------------------------------------------------------------
-  | Render
-  |--------------------------------------------------------------------------
-  */
+  // =======================================================
+  // RENDER
+  // =======================================================
 
   return (
 
     <div>
 
-
-      {/* =========================================================
+      {/* ===================================================
           PAGE HEADER
-      ========================================================= */}
+      =================================================== */}
 
       <div className="page-header">
 
@@ -525,27 +693,43 @@ const Suppliers = () => {
             Manage your product suppliers.
           </p>
 
+          {isCashier && (
+
+            <small className="text-muted">
+              You have view-only access to suppliers.
+            </small>
+
+          )}
+
         </div>
 
 
-        <Button
-          variant="primary"
-          onClick={handleAdd}
-          disabled={saving}
-        >
+        {/* ===============================================
+            ADD BUTTON
+        =============================================== */}
 
-          <i className="bi bi-plus-lg me-2"></i>
+        {!isCashier && (
 
-          Add Supplier
+          <Button
+            variant="primary"
+            onClick={handleAdd}
+            disabled={saving}
+          >
 
-        </Button>
+            <i className="bi bi-plus-lg me-2"></i>
+
+            Add Supplier
+
+          </Button>
+
+        )}
 
       </div>
 
 
-      {/* =========================================================
+      {/* ===================================================
           ERROR
-      ========================================================= */}
+      =================================================== */}
 
       {error && (
 
@@ -553,7 +737,7 @@ const Suppliers = () => {
           variant="danger"
           dismissible
           onClose={() =>
-            setError('')
+            setError("")
           }
         >
 
@@ -566,16 +750,15 @@ const Suppliers = () => {
       )}
 
 
-      {/* =========================================================
+      {/* ===================================================
           SUMMARY CARDS
-      ========================================================= */}
+      =================================================== */}
 
       <Row className="g-3 mb-4">
 
-
         {/* TOTAL */}
 
-        <Col xl={4} md={6}>
+        <Col xl={3} md={6}>
 
           <Card className="dashboard-card border-0">
 
@@ -590,13 +773,10 @@ const Suppliers = () => {
                   </small>
 
                   <h4 className="mt-2 mb-0">
-
-                    {suppliers.length}
-
+                    {statistics.total}
                   </h4>
 
                 </div>
-
 
                 <div className="stat-icon">
 
@@ -615,7 +795,7 @@ const Suppliers = () => {
 
         {/* ACTIVE */}
 
-        <Col xl={4} md={6}>
+        <Col xl={3} md={6}>
 
           <Card className="dashboard-card border-0">
 
@@ -629,19 +809,11 @@ const Suppliers = () => {
                     Active Suppliers
                   </small>
 
-                  <h4 className="mt-2 mb-0 text-success">
-
-                    {
-                      suppliers.filter(
-                        (supplier) =>
-                          supplier.is_active === true
-                      ).length
-                    }
-
+                  <h4 className="mt-2 mb-0">
+                    {statistics.active}
                   </h4>
 
                 </div>
-
 
                 <div className="stat-icon">
 
@@ -658,9 +830,9 @@ const Suppliers = () => {
         </Col>
 
 
-        {/* PRODUCTS */}
+        {/* INACTIVE */}
 
-        <Col xl={4} md={6}>
+        <Col xl={3} md={6}>
 
           <Card className="dashboard-card border-0">
 
@@ -671,17 +843,51 @@ const Suppliers = () => {
                 <div>
 
                   <small className="text-muted">
-                    Supplied Products
+                    Inactive Suppliers
                   </small>
 
                   <h4 className="mt-2 mb-0">
-
-                    {products.length}
-
+                    {statistics.inactive}
                   </h4>
 
                 </div>
 
+                <div className="stat-icon">
+
+                  <i className="bi bi-x-circle"></i>
+
+                </div>
+
+              </div>
+
+            </Card.Body>
+
+          </Card>
+
+        </Col>
+
+
+        {/* PRODUCTS */}
+
+        <Col xl={3} md={6}>
+
+          <Card className="dashboard-card border-0">
+
+            <Card.Body>
+
+              <div className="d-flex justify-content-between align-items-center">
+
+                <div>
+
+                  <small className="text-muted">
+                    Suppliers in Use
+                  </small>
+
+                  <h4 className="mt-2 mb-0">
+                    {statistics.suppliersWithProducts}
+                  </h4>
+
+                </div>
 
                 <div className="stat-icon">
 
@@ -700,16 +906,18 @@ const Suppliers = () => {
       </Row>
 
 
-      {/* =========================================================
-          SUPPLIERS TABLE
-      ========================================================= */}
+      {/* ===================================================
+          SUPPLIER CARD
+      =================================================== */}
 
-      <Card className="dashboard-card border-0">
+      <Card className="border-0 shadow-sm">
 
         <Card.Body>
 
 
-          {/* SEARCH */}
+          {/* ===============================================
+              SEARCH
+          =============================================== */}
 
           <Row className="mb-3">
 
@@ -726,9 +934,9 @@ const Suppliers = () => {
 
                 </InputGroup.Text>
 
-
                 <Form.Control
-                  placeholder="Search supplier..."
+                  type="text"
+                  placeholder="Search suppliers..."
                   value={search}
                   onChange={(e) =>
                     setSearch(
@@ -741,31 +949,12 @@ const Suppliers = () => {
 
             </Col>
 
-
-            <Col
-              md={6}
-              lg={7}
-              className="text-md-end mt-2 mt-md-0"
-            >
-
-              <Button
-                variant="outline-secondary"
-                onClick={loadSuppliers}
-                disabled={loading}
-              >
-
-                <i className="bi bi-arrow-clockwise me-2"></i>
-
-                Refresh
-
-              </Button>
-
-            </Col>
-
           </Row>
 
 
-          {/* LOADING */}
+          {/* ===============================================
+              LOADING
+          =============================================== */}
 
           {loading ? (
 
@@ -776,206 +965,228 @@ const Suppliers = () => {
                 variant="primary"
               />
 
-              <div className="text-muted mt-3">
-
+              <div className="mt-2 text-muted">
                 Loading suppliers...
-
               </div>
+
+            </div>
+
+          ) : filteredSuppliers.length === 0 ? (
+
+            /* =============================================
+               EMPTY
+            ============================================= */
+
+            <div className="text-center py-5">
+
+              <i
+                className="bi bi-truck fs-1 text-muted"
+              ></i>
+
+              <h5 className="mt-3">
+                No suppliers found
+              </h5>
+
+              <p className="text-muted">
+                {search
+                  ? "No suppliers match your search."
+                  : "No suppliers have been added yet."
+                }
+              </p>
+
+              {!isCashier && !search && (
+
+                <Button
+                  variant="primary"
+                  onClick={handleAdd}
+                >
+
+                  <i className="bi bi-plus-lg me-2"></i>
+
+                  Add Supplier
+
+                </Button>
+
+              )}
 
             </div>
 
           ) : (
 
-            <Table
-              hover
-              responsive
-              className="align-middle"
-            >
+            /* =============================================
+               TABLE
+            ============================================= */
 
-              <thead>
+            <div className="table-responsive">
 
-                <tr>
+              <Table
+                hover
+                responsive
+                className="align-middle mb-0"
+              >
 
-                  <th>#</th>
-
-                  <th>SUPPLIER</th>
-
-                  <th>PHONE</th>
-
-                  <th>EMAIL</th>
-
-                  <th>ADDRESS</th>
-
-                  <th>PRODUCTS</th>
-
-                  <th>STATUS</th>
-
-                  <th></th>
-
-                </tr>
-
-              </thead>
-
-
-              <tbody>
-
-
-                {filteredSuppliers.length === 0 ? (
+                <thead>
 
                   <tr>
 
-                    <td
-                      colSpan="8"
-                      className="text-center py-5 text-muted"
-                    >
+                    <th>
+                      #
+                    </th>
 
-                      <i className="bi bi-truck fs-2 d-block mb-2"></i>
+                    <th>
+                      Supplier
+                    </th>
 
-                      {search
-                        ? 'No suppliers found.'
-                        : 'No suppliers available.'}
+                    <th>
+                      Phone
+                    </th>
 
-                    </td>
+                    <th>
+                      Email
+                    </th>
+
+                    <th>
+                      Address
+                    </th>
+
+                    <th className="text-center">
+                      Products
+                    </th>
+
+                    <th className="text-center">
+                      Status
+                    </th>
+
+                    {!isCashier && (
+
+                      <th className="text-end">
+                        Actions
+                      </th>
+
+                    )}
 
                   </tr>
 
-                ) : (
-
-                  filteredSuppliers.map(
-                    (supplier, index) => {
-
-                      const productCount =
-                        getProductCount(
-                          supplier.id
-                        );
+                </thead>
 
 
-                      const isActive =
-                        supplier.is_active === true;
+                <tbody>
+
+                  {filteredSuppliers.map(
+                    (supplier, index) => (
+
+                      <tr
+                        key={
+                          supplier.id ??
+                          index
+                        }
+                      >
+
+                        <td>
+                          {index + 1}
+                        </td>
 
 
-                      return (
+                        {/* SUPPLIER */}
 
-                        <tr
-                          key={
-                            supplier.id
-                          }
-                        >
+                        <td>
 
-                          {/* NUMBER */}
+                          <div className="fw-semibold">
 
-                          <td>
-                            {index + 1}
-                          </td>
+                            {getSupplierName(
+                              supplier
+                            )}
 
+                          </div>
 
-                          {/* SUPPLIER */}
-
-                          <td>
-
-                            <div className="d-flex align-items-center gap-2">
-
-                              <div className="stock-icon">
-
-                                <i className="bi bi-truck"></i>
-
-                              </div>
+                        </td>
 
 
-                              <div>
+                        {/* PHONE */}
 
-                                <strong>
+                        <td>
 
-                                  {supplier.name}
+                          {getSupplierPhone(
+                            supplier
+                          )}
 
-                                </strong>
-
-                              </div>
-
-                            </div>
-
-                          </td>
+                        </td>
 
 
-                          {/* PHONE */}
+                        {/* EMAIL */}
 
-                          <td>
+                        <td>
 
-                            {supplier.phone ||
-                              '-'}
+                          {getSupplierEmail(
+                            supplier
+                          )}
 
-                          </td>
-
-
-                          {/* EMAIL */}
-
-                          <td>
-
-                            {supplier.email ||
-                              '-'}
-
-                          </td>
+                        </td>
 
 
-                          {/* ADDRESS */}
+                        {/* ADDRESS */}
 
-                          <td>
+                        <td>
 
-                            {supplier.address ||
-                              '-'}
+                          {getSupplierAddress(
+                            supplier
+                          )}
 
-                          </td>
+                        </td>
 
 
-                          {/* PRODUCTS */}
+                        {/* PRODUCTS */}
 
-                          <td>
+                        <td className="text-center">
 
-                            <Badge
-                              bg="light"
-                              text="dark"
-                            >
+                          <Badge
+                            bg="secondary"
+                          >
 
-                              {productCount}
+                            {getProductCount(
+                              supplier.id
+                            )}
 
+                          </Badge>
+
+                        </td>
+
+
+                        {/* STATUS */}
+
+                        <td className="text-center">
+
+                          {getSupplierStatus(
+                            supplier
+                          ) === "Active" ? (
+
+                            <Badge bg="success">
+                              Active
                             </Badge>
 
-                          </td>
+                          ) : (
 
-
-                          {/* STATUS */}
-
-                          <td>
-
-                            <Badge
-                              bg={
-                                isActive
-                                  ? 'success'
-                                  : 'secondary'
-                              }
-                            >
-
-                              {isActive
-                                ? 'Active'
-                                : 'Inactive'}
-
+                            <Badge bg="secondary">
+                              Inactive
                             </Badge>
 
-                          </td>
+                          )}
+
+                        </td>
 
 
-                          {/* ACTIONS */}
+                        {/* ACTIONS */}
 
-                          <td>
+                        {!isCashier && (
 
-                            <Dropdown
-                              align="end"
-                            >
+                          <td className="text-end">
+
+                            <Dropdown align="end">
 
                               <Dropdown.Toggle
                                 variant="light"
                                 size="sm"
-                                className="border-0"
+                                id={`supplier-actions-${supplier.id}`}
                               >
 
                                 <i className="bi bi-three-dots-vertical"></i>
@@ -984,7 +1195,6 @@ const Suppliers = () => {
 
 
                               <Dropdown.Menu>
-
 
                                 {/* EDIT */}
 
@@ -1003,7 +1213,7 @@ const Suppliers = () => {
                                 </Dropdown.Item>
 
 
-                                {/* STATUS */}
+                                {/* ACTIVATE / DEACTIVATE */}
 
                                 <Dropdown.Item
                                   onClick={() =>
@@ -1013,19 +1223,23 @@ const Suppliers = () => {
                                   }
                                 >
 
-                                  <i
-                                    className={
-                                      `bi ${
-                                        isActive
-                                          ? 'bi-toggle-off'
-                                          : 'bi-toggle-on'
-                                      } me-2`
-                                    }
-                                  ></i>
+                                  {getSupplierStatus(
+                                    supplier
+                                  ) === "Active" ? (
 
-                                  {isActive
-                                    ? 'Deactivate'
-                                    : 'Activate'}
+                                    <>
+                                      <i className="bi bi-toggle-off me-2"></i>
+                                      Deactivate
+                                    </>
+
+                                  ) : (
+
+                                    <>
+                                      <i className="bi bi-toggle-on me-2"></i>
+                                      Activate
+                                    </>
+
+                                  )}
 
                                 </Dropdown.Item>
 
@@ -1056,18 +1270,18 @@ const Suppliers = () => {
 
                           </td>
 
-                        </tr>
+                        )}
 
-                      );
+                      </tr>
 
-                    }
-                  )
+                    )
+                  )}
 
-                )}
+                </tbody>
 
-              </tbody>
+              </Table>
 
-            </Table>
+            </div>
 
           )}
 
@@ -1076,33 +1290,26 @@ const Suppliers = () => {
       </Card>
 
 
-      {/* =========================================================
+      {/* ===================================================
           SUPPLIER MODAL
-      ========================================================= */}
+      =================================================== */}
 
-      <SupplierModal
-        show={showModal}
+      {!isCashier && (
 
-        onHide={() => {
+        <SupplierModal
+          show={showModal}
+          onHide={handleCloseModal}
+          supplier={editingSupplier}
+          onSave={handleSave}
+          saving={saving}
+        />
 
-          setShowModal(false);
-
-          setEditingSupplier(null);
-
-        }}
-
-        onSave={handleSave}
-
-        supplier={editingSupplier}
-
-        saving={saving}
-      />
+      )}
 
     </div>
-
   );
-
 };
 
 
 export default Suppliers;
+

@@ -1,4 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+
+import React, {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import {
   Card,
@@ -12,55 +17,202 @@ import {
   Col,
   Spinner,
   Alert,
-} from 'react-bootstrap';
+} from "react-bootstrap";
 
-import CategoryModal from '../components/inventory/CategoryModal';
+import CategoryModal
+  from "../components/inventory/CategoryModal";
 
-import categoriesApi from '../services/categoriesApi';
+import categoriesApi
+  from "../services/categoriesApi";
 
-import { useInventory } from '../context/InventoryContext';
+import { useInventory }
+  from "../context/InventoryContext";
 
+import { useAuth }
+  from "../context/AuthContext";
+
+
+// =========================================================
+// HELPERS
+// =========================================================
+
+const getRoleName = (user) => {
+
+  if (!user) {
+    return "";
+  }
+
+  const role = user.role;
+
+  // role = "cashier"
+  if (typeof role === "string") {
+
+    return role
+      .trim()
+      .toLowerCase();
+
+  }
+
+  // role = { name: "Cashier" }
+  if (
+    role &&
+    typeof role === "object"
+  ) {
+
+    return String(
+      role.name ??
+      role.code ??
+      ""
+    )
+      .trim()
+      .toLowerCase();
+
+  }
+
+  // Other possible user formats
+  return String(
+    user.role_name ??
+    user.roleName ??
+    ""
+  )
+    .trim()
+    .toLowerCase();
+};
+
+
+// =========================================================
+// CATEGORY HELPERS
+// =========================================================
+
+const getCategoryName = (category) => {
+
+  return (
+    category?.name ??
+    category?.category_name ??
+    category?.categoryName ??
+    "-"
+  );
+};
+
+
+const getCategoryDescription = (category) => {
+
+  return (
+    category?.description ??
+    "-"
+  );
+};
+
+
+const getCategoryStatus = (category) => {
+
+  if (
+    category?.is_active === true ||
+    category?.is_active === 1
+  ) {
+    return "Active";
+  }
+
+  if (
+    category?.is_active === false ||
+    category?.is_active === 0
+  ) {
+    return "Inactive";
+  }
+
+  if (
+    String(
+      category?.status ?? ""
+    ).toLowerCase() === "active"
+  ) {
+    return "Active";
+  }
+
+  return "Inactive";
+};
+
+
+const getParentCategory = (category) => {
+
+  return (
+    category?.parent_name ??
+    category?.parent?.name ??
+    "-"
+  );
+};
+
+
+// =========================================================
+// COMPONENT
+// =========================================================
 
 const Categories = () => {
 
-  /*
-  |--------------------------------------------------------------------------
-  | Inventory Context
-  |--------------------------------------------------------------------------
-  */
+  // =======================================================
+  // AUTH
+  // =======================================================
+
+  const { user } = useAuth();
+
+  const roleName =
+    getRoleName(user);
+
+  const isCashier =
+    roleName === "cashier";
+
+
+  // =======================================================
+  // INVENTORY CONTEXT
+  // =======================================================
 
   const {
     products = [],
   } = useInventory();
 
 
-  /*
-  |--------------------------------------------------------------------------
-  | State
-  |--------------------------------------------------------------------------
-  */
+  // =======================================================
+  // STATE
+  // =======================================================
 
-  const [categories, setCategories] = useState([]);
+  const [
+    categories,
+    setCategories,
+  ] = useState([]);
 
-  const [loading, setLoading] = useState(true);
+  const [
+    loading,
+    setLoading,
+  ] = useState(true);
 
-  const [saving, setSaving] = useState(false);
+  const [
+    saving,
+    setSaving,
+  ] = useState(false);
 
-  const [error, setError] = useState('');
+  const [
+    error,
+    setError,
+  ] = useState("");
 
-  const [search, setSearch] = useState('');
+  const [
+    search,
+    setSearch,
+  ] = useState("");
 
-  const [showModal, setShowModal] = useState(false);
+  const [
+    showModal,
+    setShowModal,
+  ] = useState(false);
 
-  const [editingCategory, setEditingCategory] =
-    useState(null);
+  const [
+    editingCategory,
+    setEditingCategory,
+  ] = useState(null);
 
 
-  /*
-  |--------------------------------------------------------------------------
-  | Load Categories
-  |--------------------------------------------------------------------------
-  */
+  // =======================================================
+  // LOAD CATEGORIES
+  // =======================================================
 
   const loadCategories = async () => {
 
@@ -68,42 +220,37 @@ const Categories = () => {
 
       setLoading(true);
 
-      setError('');
+      setError("");
 
       const data =
         await categoriesApi.getAll();
 
-      /*
-       * DRF pagination returns:
-       *
-       * {
-       *   count: 10,
-       *   next: null,
-       *   previous: null,
-       *   results: [...]
-       * }
-       *
-       * If pagination is disabled,
-       * it returns an array directly.
-       */
+
+      // ===================================================
+      // DRF PAGINATION
+      // ===================================================
 
       const categoryData =
         Array.isArray(data)
           ? data
           : data?.results || [];
 
-      setCategories(categoryData);
+
+      setCategories(
+        categoryData
+      );
 
     } catch (err) {
 
       console.error(
-        'Failed to fetch categories:',
+        "Failed to fetch categories:",
         err
       );
 
       setError(
         err?.response?.data?.detail ||
-        'Failed to load categories. Please try again.'
+        err?.response?.data?.message ||
+        "Failed to load categories. Please try again."
       );
 
     } finally {
@@ -114,11 +261,9 @@ const Categories = () => {
   };
 
 
-  /*
-  |--------------------------------------------------------------------------
-  | Load On Page Start
-  |--------------------------------------------------------------------------
-  */
+  // =======================================================
+  // LOAD ON PAGE START
+  // =======================================================
 
   useEffect(() => {
 
@@ -127,66 +272,155 @@ const Categories = () => {
   }, []);
 
 
-  /*
-  |--------------------------------------------------------------------------
-  | Product Count
-  |--------------------------------------------------------------------------
-  */
+  // =======================================================
+  // PRODUCT COUNT
+  // =======================================================
 
-  const getProductCount = (categoryId) => {
+  const getProductCount = (
+    categoryId
+  ) => {
 
     return products.filter(
-      (product) =>
-        Number(
-          product.categoryId ??
-          product.category_id ??
-          product.category
-        ) === Number(categoryId)
+      (product) => {
+
+        const productCategory =
+          product?.categoryId ??
+          product?.category_id ??
+          product?.category?.id ??
+          product?.category;
+
+        return (
+          Number(productCategory) ===
+          Number(categoryId)
+        );
+
+      }
     ).length;
 
   };
 
 
-  /*
-  |--------------------------------------------------------------------------
-  | Search
-  |--------------------------------------------------------------------------
-  */
+  // =======================================================
+  // SEARCH
+  // =======================================================
 
-  const filteredCategories = useMemo(() => {
+  const filteredCategories =
+    useMemo(() => {
 
-    const keyword =
-      search.trim().toLowerCase();
+      const keyword =
+        search
+          .trim()
+          .toLowerCase();
 
-    if (!keyword) {
-      return categories;
-    }
 
-    return categories.filter((category) => {
+      if (!keyword) {
 
-      const name =
-        category.name?.toLowerCase() || '';
+        return categories;
 
-      const description =
-        category.description?.toLowerCase() || '';
+      }
 
-      return (
-        name.includes(keyword) ||
-        description.includes(keyword)
+
+      return categories.filter(
+        (category) => {
+
+          const name =
+            String(
+              getCategoryName(
+                category
+              )
+            ).toLowerCase();
+
+          const description =
+            String(
+              getCategoryDescription(
+                category
+              )
+            ).toLowerCase();
+
+          const parent =
+            String(
+              getParentCategory(
+                category
+              )
+            ).toLowerCase();
+
+
+          return (
+            name.includes(keyword) ||
+            description.includes(keyword) ||
+            parent.includes(keyword)
+          );
+
+        }
       );
 
-    });
+    }, [
+      categories,
+      search,
+    ]);
 
-  }, [categories, search]);
+
+  // =======================================================
+  // STATISTICS
+  // =======================================================
+
+  const statistics =
+    useMemo(() => {
+
+      const total =
+        categories.length;
 
 
-  /*
-  |--------------------------------------------------------------------------
-  | Open Add Modal
-  |--------------------------------------------------------------------------
-  */
+      const active =
+        categories.filter(
+          (category) =>
+            getCategoryStatus(
+              category
+            ) === "Active"
+        ).length;
+
+
+      const inactive =
+        categories.filter(
+          (category) =>
+            getCategoryStatus(
+              category
+            ) === "Inactive"
+        ).length;
+
+
+      const categoriesInUse =
+        categories.filter(
+          (category) =>
+            getProductCount(
+              category.id
+            ) > 0
+        ).length;
+
+
+      return {
+        total,
+        active,
+        inactive,
+        categoriesInUse,
+      };
+
+    }, [
+      categories,
+      products,
+    ]);
+
+
+  // =======================================================
+  // ADD CATEGORY
+  // =======================================================
 
   const handleAdd = () => {
+
+    // Cashier cannot add
+    if (isCashier) {
+      return;
+    }
 
     setEditingCategory(null);
 
@@ -195,61 +429,96 @@ const Categories = () => {
   };
 
 
-  /*
-  |--------------------------------------------------------------------------
-  | Open Edit Modal
-  |--------------------------------------------------------------------------
-  */
+  // =======================================================
+  // EDIT CATEGORY
+  // =======================================================
 
-  const handleEdit = (category) => {
+  const handleEdit = (
+    category
+  ) => {
 
-    setEditingCategory(category);
+    // Cashier cannot edit
+    if (isCashier) {
+      return;
+    }
+
+    setEditingCategory(
+      category
+    );
 
     setShowModal(true);
 
   };
 
 
-  /*
-  |--------------------------------------------------------------------------
-  | Save Category
-  |--------------------------------------------------------------------------
-  */
+  // =======================================================
+  // CLOSE MODAL
+  // =======================================================
 
-  const handleSave = async (data) => {
+  const handleCloseModal = () => {
+
+    if (saving) {
+      return;
+    }
+
+    setShowModal(false);
+
+    setEditingCategory(null);
+
+  };
+
+
+  // =======================================================
+  // SAVE CATEGORY
+  // =======================================================
+
+  const handleSave = async (
+    data
+  ) => {
+
+    // Cashier cannot create/update
+    if (isCashier) {
+      return;
+    }
+
 
     try {
 
       setSaving(true);
 
-      setError('');
+      setError("");
 
-      /*
-       * Convert frontend fields to Django fields.
-       */
+
+      // ===================================================
+      // PAYLOAD
+      // ===================================================
 
       const payload = {
 
         name:
-          data.name?.trim(),
+          data?.name?.trim() || "",
 
         description:
-          data.description?.trim() || '',
+          data?.description?.trim() || "",
 
         parent:
-          data.parent || null,
+          data?.parent || null,
 
         is_active:
-          data.is_active ??
-          data.status === 'Active' ??
-          true,
+          data?.is_active ??
+          (
+            String(
+              data?.status ?? ""
+            ).toLowerCase() ===
+            "active"
+          ),
 
       };
 
 
-      /*
-       * UPDATE
-       */
+      // ===================================================
+      // UPDATE
+      // ===================================================
 
       if (editingCategory) {
 
@@ -260,9 +529,10 @@ const Categories = () => {
 
       }
 
-      /*
-       * CREATE
-       */
+
+      // ===================================================
+      // CREATE
+      // ===================================================
 
       else {
 
@@ -273,50 +543,55 @@ const Categories = () => {
       }
 
 
-      /*
-       * Close modal
-       */
+      // ===================================================
+      // CLOSE
+      // ===================================================
 
       setShowModal(false);
 
       setEditingCategory(null);
 
 
-      /*
-       * Reload latest data
-       */
+      // ===================================================
+      // RELOAD
+      // ===================================================
 
       await loadCategories();
 
     } catch (err) {
 
       console.error(
-        'Failed to save category:',
+        "Failed to save category:",
         err
       );
 
       const backendError =
         err?.response?.data;
 
+
       if (
         backendError &&
-        typeof backendError === 'object'
+        typeof backendError === "object"
       ) {
 
         const firstError =
-          Object.values(backendError)
+          Object.values(
+            backendError
+          )
             .flat()
-            .join(' ');
+            .join(" ");
+
 
         setError(
           firstError ||
-          'Failed to save category.'
+          "Failed to save category."
         );
 
       } else {
 
         setError(
-          'Failed to save category. Please try again.'
+          err?.message ||
+          "Failed to save category. Please try again."
         );
 
       }
@@ -330,39 +605,48 @@ const Categories = () => {
   };
 
 
-  /*
-  |--------------------------------------------------------------------------
-  | Delete Category
-  |--------------------------------------------------------------------------
-  */
+  // =======================================================
+  // DELETE CATEGORY
+  // =======================================================
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (
+    id
+  ) => {
 
-    /*
-     * Prevent deletion when products
-     * are still using this category.
-     */
+    // Cashier cannot delete
+    if (isCashier) {
+      return;
+    }
+
+
+    // ===================================================
+    // CHECK PRODUCTS
+    // ===================================================
 
     const hasProducts =
-      products.some((product) => {
+      products.some(
+        (product) => {
 
-        const productCategory =
-          product.categoryId ??
-          product.category_id ??
-          product.category;
+          const productCategory =
+            product?.categoryId ??
+            product?.category_id ??
+            product?.category?.id ??
+            product?.category;
 
-        return (
-          Number(productCategory) ===
-          Number(id)
-        );
 
-      });
+          return (
+            Number(productCategory) ===
+            Number(id)
+          );
+
+        }
+      );
 
 
     if (hasProducts) {
 
       alert(
-        'This category contains products. Move the products to another category before deleting it.'
+        "This category contains products. Move the products to another category before deleting it."
       );
 
       return;
@@ -370,9 +654,13 @@ const Categories = () => {
     }
 
 
+    // ===================================================
+    // CONFIRM
+    // ===================================================
+
     const confirmed =
       window.confirm(
-        'Are you sure you want to delete this category?'
+        "Are you sure you want to delete this category?"
       );
 
 
@@ -381,24 +669,31 @@ const Categories = () => {
     }
 
 
+    // ===================================================
+    // DELETE
+    // ===================================================
+
     try {
 
-      setError('');
+      setError("");
 
-      await categoriesApi.delete(id);
+      await categoriesApi.delete(
+        id
+      );
 
       await loadCategories();
 
     } catch (err) {
 
       console.error(
-        'Failed to delete category:',
+        "Failed to delete category:",
         err
       );
 
       setError(
         err?.response?.data?.detail ||
-        'Failed to delete category.'
+        err?.response?.data?.message ||
+        "Failed to delete category."
       );
 
     }
@@ -406,57 +701,66 @@ const Categories = () => {
   };
 
 
-  /*
-  |--------------------------------------------------------------------------
-  | Toggle Active Status
-  |--------------------------------------------------------------------------
-  */
+  // =======================================================
+  // TOGGLE STATUS
+  // =======================================================
 
-  const handleToggleStatus = async (category) => {
+  const handleToggleStatus =
+    async (
+      category
+    ) => {
 
-    try {
-
-      setError('');
-
-      await categoriesApi.patch(
-        category.id,
-        {
-          is_active:
-            !category.is_active,
-        }
-      );
-
-      await loadCategories();
-
-    } catch (err) {
-
-      console.error(
-        'Failed to update category status:',
-        err
-      );
-
-      setError(
-        'Failed to update category status.'
-      );
-
-    }
-
-  };
+      // Cashier cannot activate/deactivate
+      if (isCashier) {
+        return;
+      }
 
 
-  /*
-  |--------------------------------------------------------------------------
-  | Render
-  |--------------------------------------------------------------------------
-  */
+      try {
+
+        setError("");
+
+
+        await categoriesApi.patch(
+          category.id,
+          {
+            is_active:
+              !category.is_active,
+          }
+        );
+
+
+        await loadCategories();
+
+      } catch (err) {
+
+        console.error(
+          "Failed to update category status:",
+          err
+        );
+
+        setError(
+          err?.response?.data?.detail ||
+          err?.response?.data?.message ||
+          "Failed to update category status."
+        );
+
+      }
+
+    };
+
+
+  // =======================================================
+  // RENDER
+  // =======================================================
 
   return (
 
     <div>
 
-      {/* =========================================================
+      {/* ===================================================
           PAGE HEADER
-      ========================================================= */}
+      =================================================== */}
 
       <div className="page-header">
 
@@ -470,34 +774,57 @@ const Categories = () => {
             Organize your products into categories.
           </p>
 
+
+          {isCashier && (
+
+            <small className="text-muted">
+
+              <i className="bi bi-eye me-1"></i>
+
+              You have view-only access to categories.
+
+            </small>
+
+          )}
+
         </div>
 
 
-        <Button
-          variant="primary"
-          onClick={handleAdd}
-          disabled={saving}
-        >
+        {/* =================================================
+            ADD BUTTON
+        ================================================= */}
 
-          <i className="bi bi-plus-lg me-2"></i>
+        {!isCashier && (
 
-          Add Category
+          <Button
+            variant="primary"
+            onClick={handleAdd}
+            disabled={saving}
+          >
 
-        </Button>
+            <i className="bi bi-plus-lg me-2"></i>
+
+            Add Category
+
+          </Button>
+
+        )}
 
       </div>
 
 
-      {/* =========================================================
-          ERROR MESSAGE
-      ========================================================= */}
+      {/* ===================================================
+          ERROR
+      =================================================== */}
 
       {error && (
 
         <Alert
           variant="danger"
           dismissible
-          onClose={() => setError('')}
+          onClose={() =>
+            setError("")
+          }
         >
 
           <i className="bi bi-exclamation-triangle me-2"></i>
@@ -509,13 +836,15 @@ const Categories = () => {
       )}
 
 
-      {/* =========================================================
+      {/* ===================================================
           SUMMARY
-      ========================================================= */}
+      =================================================== */}
 
       <Row className="g-3 mb-4">
 
-        <Col xl={4} md={6}>
+        {/* TOTAL */}
+
+        <Col xl={3} md={6}>
 
           <Card className="dashboard-card border-0">
 
@@ -530,14 +859,14 @@ const Categories = () => {
                   </small>
 
                   <h4 className="mt-2 mb-0">
-                    {categories.length}
+                    {statistics.total}
                   </h4>
 
                 </div>
 
                 <div className="stat-icon">
 
-                  <i className="bi bi-tags"></i>
+                  <i className="bi bi-grid"></i>
 
                 </div>
 
@@ -550,7 +879,9 @@ const Categories = () => {
         </Col>
 
 
-        <Col xl={4} md={6}>
+        {/* ACTIVE */}
+
+        <Col xl={3} md={6}>
 
           <Card className="dashboard-card border-0">
 
@@ -564,15 +895,8 @@ const Categories = () => {
                     Active Categories
                   </small>
 
-                  <h4 className="mt-2 mb-0 text-success">
-
-                    {
-                      categories.filter(
-                        (category) =>
-                          category.is_active === true
-                      ).length
-                    }
-
+                  <h4 className="mt-2 mb-0">
+                    {statistics.active}
                   </h4>
 
                 </div>
@@ -592,7 +916,9 @@ const Categories = () => {
         </Col>
 
 
-        <Col xl={4} md={6}>
+        {/* INACTIVE */}
+
+        <Col xl={3} md={6}>
 
           <Card className="dashboard-card border-0">
 
@@ -603,13 +929,48 @@ const Categories = () => {
                 <div>
 
                   <small className="text-muted">
-                    Products Categorized
+                    Inactive Categories
                   </small>
 
                   <h4 className="mt-2 mb-0">
+                    {statistics.inactive}
+                  </h4>
 
-                    {products.length}
+                </div>
 
+                <div className="stat-icon">
+
+                  <i className="bi bi-x-circle"></i>
+
+                </div>
+
+              </div>
+
+            </Card.Body>
+
+          </Card>
+
+        </Col>
+
+
+        {/* IN USE */}
+
+        <Col xl={3} md={6}>
+
+          <Card className="dashboard-card border-0">
+
+            <Card.Body>
+
+              <div className="d-flex justify-content-between align-items-center">
+
+                <div>
+
+                  <small className="text-muted">
+                    Categories in Use
+                  </small>
+
+                  <h4 className="mt-2 mb-0">
+                    {statistics.categoriesInUse}
                   </h4>
 
                 </div>
@@ -631,18 +992,18 @@ const Categories = () => {
       </Row>
 
 
-      {/* =========================================================
-          CATEGORY TABLE
-      ========================================================= */}
+      {/* ===================================================
+          MAIN CARD
+      =================================================== */}
 
-      <Card className="dashboard-card border-0">
+      <Card className="border-0 shadow-sm">
 
         <Card.Body>
 
 
-          {/* =====================================================
+          {/* =================================================
               SEARCH
-          ===================================================== */}
+          ================================================= */}
 
           <Row className="mb-3">
 
@@ -659,8 +1020,10 @@ const Categories = () => {
 
                 </InputGroup.Text>
 
+
                 <Form.Control
-                  placeholder="Search category..."
+                  type="text"
+                  placeholder="Search categories..."
                   value={search}
                   onChange={(e) =>
                     setSearch(
@@ -673,33 +1036,12 @@ const Categories = () => {
 
             </Col>
 
-
-            <Col
-              md={6}
-              lg={7}
-              className="text-md-end mt-2 mt-md-0"
-            >
-
-              <Button
-                variant="outline-secondary"
-                onClick={loadCategories}
-                disabled={loading}
-              >
-
-                <i className="bi bi-arrow-clockwise me-2"></i>
-
-                Refresh
-
-              </Button>
-
-            </Col>
-
           </Row>
 
 
-          {/* =====================================================
+          {/* =================================================
               LOADING
-          ===================================================== */}
+          ================================================= */}
 
           {loading ? (
 
@@ -710,7 +1052,7 @@ const Categories = () => {
                 variant="primary"
               />
 
-              <div className="text-muted mt-3">
+              <div className="mt-2 text-muted">
 
                 Loading categories...
 
@@ -718,191 +1060,230 @@ const Categories = () => {
 
             </div>
 
+          ) : filteredCategories.length === 0 ? (
+
+            /* ===============================================
+               EMPTY
+            =============================================== */
+
+            <div className="text-center py-5">
+
+              <i
+                className="bi bi-grid fs-1 text-muted"
+              ></i>
+
+
+              <h5 className="mt-3">
+
+                No categories found
+
+              </h5>
+
+
+              <p className="text-muted">
+
+                {search
+                  ? "No categories match your search."
+                  : "No categories have been added yet."
+                }
+
+              </p>
+
+
+              {!isCashier && !search && (
+
+                <Button
+                  variant="primary"
+                  onClick={handleAdd}
+                >
+
+                  <i className="bi bi-plus-lg me-2"></i>
+
+                  Add Category
+
+                </Button>
+
+              )}
+
+            </div>
+
           ) : (
 
-            <Table
-              hover
-              responsive
-              className="align-middle"
-            >
+            /* ===============================================
+               TABLE
+            =============================================== */
 
-              <thead>
+            <div className="table-responsive">
 
-                <tr>
+              <Table
+                hover
+                responsive
+                className="align-middle mb-0"
+              >
 
-                  <th>#</th>
-
-                  <th>CATEGORY</th>
-
-                  <th>DESCRIPTION</th>
-
-                  <th>PRODUCTS</th>
-
-                  <th>STATUS</th>
-
-                  <th></th>
-
-                </tr>
-
-              </thead>
-
-
-              <tbody>
-
-
-                {filteredCategories.length === 0 ? (
+                <thead>
 
                   <tr>
 
-                    <td
-                      colSpan="6"
-                      className="text-center py-5 text-muted"
-                    >
+                    <th>
+                      #
+                    </th>
 
-                      <i className="bi bi-tags fs-2 d-block mb-2"></i>
+                    <th>
+                      Category
+                    </th>
 
-                      {search
-                        ? 'No categories found.'
-                        : 'No categories available.'}
+                    <th>
+                      Description
+                    </th>
 
-                    </td>
+                    <th>
+                      Parent
+                    </th>
+
+                    <th className="text-center">
+                      Products
+                    </th>
+
+                    <th className="text-center">
+                      Status
+                    </th>
+
+
+                    {/* ACTIONS ONLY FOR NON-CASHIER */}
+
+                    {!isCashier && (
+
+                      <th className="text-end">
+                        Actions
+                      </th>
+
+                    )}
 
                   </tr>
 
-                ) : (
-
-                  filteredCategories.map(
-                    (category, index) => {
-
-                      const productCount =
-                        getProductCount(
-                          category.id
-                        );
+                </thead>
 
 
-                      const isActive =
-                        category.is_active === true;
+                <tbody>
+
+                  {filteredCategories.map(
+                    (
+                      category,
+                      index
+                    ) => (
+
+                      <tr
+                        key={
+                          category.id ??
+                          index
+                        }
+                      >
+
+                        {/* NUMBER */}
+
+                        <td>
+                          {index + 1}
+                        </td>
 
 
-                      return (
+                        {/* CATEGORY */}
 
-                        <tr
-                          key={
-                            category.id
-                          }
-                        >
+                        <td>
 
-                          {/* NUMBER */}
+                          <div className="fw-semibold">
 
-                          <td>
+                            {getCategoryName(
+                              category
+                            )}
 
-                            {index + 1}
+                          </div>
 
-                          </td>
+                        </td>
 
 
-                          {/* CATEGORY */}
+                        {/* DESCRIPTION */}
 
-                          <td>
+                        <td>
 
-                            <div className="d-flex align-items-center gap-2">
+                          <span className="text-muted">
 
-                              <div
-                                className="stock-icon"
-                              >
+                            {getCategoryDescription(
+                              category
+                            )}
 
-                                <i className="bi bi-tag"></i>
+                          </span>
 
-                              </div>
-
-                              <div>
-
-                                <strong>
-                                  {category.name}
-                                </strong>
-
-                                {category.parent_name && (
-
-                                  <small className="text-muted d-block">
-
-                                    Parent:
-                                    {' '}
-                                    {category.parent_name}
-
-                                  </small>
-
-                                )}
-
-                              </div>
-
-                            </div>
-
-                          </td>
+                        </td>
 
 
-                          {/* DESCRIPTION */}
+                        {/* PARENT */}
 
-                          <td>
+                        <td>
 
-                            <span className="text-muted">
+                          {getParentCategory(
+                            category
+                          )}
 
-                              {category.description ||
-                                '-'}
-
-                            </span>
-
-                          </td>
+                        </td>
 
 
-                          {/* PRODUCTS */}
+                        {/* PRODUCTS */}
 
-                          <td>
+                        <td className="text-center">
 
-                            <Badge
-                              bg="light"
-                              text="dark"
-                            >
+                          <Badge bg="secondary">
 
-                              {productCount}
+                            {getProductCount(
+                              category.id
+                            )}
+
+                          </Badge>
+
+                        </td>
+
+
+                        {/* STATUS */}
+
+                        <td className="text-center">
+
+                          {getCategoryStatus(
+                            category
+                          ) === "Active" ? (
+
+                            <Badge bg="success">
+
+                              Active
 
                             </Badge>
 
-                          </td>
+                          ) : (
 
+                            <Badge bg="secondary">
 
-                          {/* STATUS */}
-
-                          <td>
-
-                            <Badge
-                              bg={
-                                isActive
-                                  ? 'success'
-                                  : 'secondary'
-                              }
-                            >
-
-                              {isActive
-                                ? 'Active'
-                                : 'Inactive'}
+                              Inactive
 
                             </Badge>
 
-                          </td>
+                          )}
+
+                        </td>
 
 
-                          {/* ACTIONS */}
+                        {/* =================================================
+                            ACTIONS
+                        ================================================= */}
 
-                          <td>
+                        {!isCashier && (
 
-                            <Dropdown
-                              align="end"
-                            >
+                          <td className="text-end">
+
+                            <Dropdown align="end">
 
                               <Dropdown.Toggle
                                 variant="light"
                                 size="sm"
-                                className="border-0"
+                                id={`category-actions-${category.id}`}
                               >
 
                                 <i className="bi bi-three-dots-vertical"></i>
@@ -930,7 +1311,7 @@ const Categories = () => {
                                 </Dropdown.Item>
 
 
-                                {/* STATUS */}
+                                {/* ACTIVATE / DEACTIVATE */}
 
                                 <Dropdown.Item
                                   onClick={() =>
@@ -940,19 +1321,29 @@ const Categories = () => {
                                   }
                                 >
 
-                                  <i
-                                    className={
-                                      `bi ${
-                                        isActive
-                                          ? 'bi-toggle-off'
-                                          : 'bi-toggle-on'
-                                      } me-2`
-                                    }
-                                  ></i>
+                                  {getCategoryStatus(
+                                    category
+                                  ) === "Active" ? (
 
-                                  {isActive
-                                    ? 'Deactivate'
-                                    : 'Activate'}
+                                    <>
+
+                                      <i className="bi bi-toggle-off me-2"></i>
+
+                                      Deactivate
+
+                                    </>
+
+                                  ) : (
+
+                                    <>
+
+                                      <i className="bi bi-toggle-on me-2"></i>
+
+                                      Activate
+
+                                    </>
+
+                                  )}
 
                                 </Dropdown.Item>
 
@@ -984,18 +1375,18 @@ const Categories = () => {
 
                           </td>
 
-                        </tr>
+                        )}
 
-                      );
+                      </tr>
 
-                    }
-                  )
+                    )
+                  )}
 
-                )}
+                </tbody>
 
-              </tbody>
+              </Table>
 
-            </Table>
+            </div>
 
           )}
 
@@ -1004,27 +1395,21 @@ const Categories = () => {
       </Card>
 
 
-      {/* =========================================================
+      {/* ===================================================
           CATEGORY MODAL
-      ========================================================= */}
+      =================================================== */}
 
-      <CategoryModal
-        show={showModal}
+      {!isCashier && (
 
-        onHide={() => {
+        <CategoryModal
+          show={showModal}
+          onHide={handleCloseModal}
+          category={editingCategory}
+          onSave={handleSave}
+          saving={saving}
+        />
 
-          setShowModal(false);
-
-          setEditingCategory(null);
-
-        }}
-
-        onSave={handleSave}
-
-        category={editingCategory}
-
-        saving={saving}
-      />
+      )}
 
     </div>
 
@@ -1034,3 +1419,4 @@ const Categories = () => {
 
 
 export default Categories;
+

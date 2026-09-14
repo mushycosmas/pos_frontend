@@ -93,7 +93,7 @@ const Sidebar = () => {
           name: 'Brands',
           icon: 'bi-award',
           path: '/brands',
-          permission: 'brands.view_brand',
+          permission: 'products.view_brand',
         },
         {
           name: 'Purchases',
