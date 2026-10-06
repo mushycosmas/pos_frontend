@@ -1,4 +1,3 @@
-
 import React, {
   useCallback,
   useEffect,
@@ -37,12 +36,11 @@ import productApi from "../services/productsApi";
 
 // ============================================================
 // DASHBOARD
+// Permission-driven dashboard
 // ============================================================
 
 const Dashboard = () => {
-
   const navigate = useNavigate();
-
 
   // ==========================================================
   // AUTH
@@ -54,22 +52,46 @@ const Dashboard = () => {
     hasPermission,
   } = useAuth();
 
-
   // ==========================================================
   // STATES
   // ==========================================================
 
   const [sales, setSales] = useState([]);
-
   const [products, setProducts] = useState([]);
 
   const [loading, setLoading] = useState(true);
-
   const [error, setError] = useState("");
 
-  const [chartPeriod, setChartPeriod] =
-    useState("7");
+  const [chartPeriod, setChartPeriod] = useState("7");
 
+  // ==========================================================
+  // PERMISSIONS
+  // ==========================================================
+  //
+  // IMPORTANT:
+  // Dashboard authorization is based on permissions only.
+  // There is intentionally NO role_name / admin / cashier /
+  // manager / owner / storekeeper logic here.
+  //
+  // ==========================================================
+
+  const canViewDashboard =
+    hasPermission("dashboard.view_dashboard");
+
+  const canViewSales =
+    hasPermission("sales.view_sale");
+
+  const canCreateSale =
+    hasPermission("sales.add_sale");
+
+  const canViewProducts =
+    hasPermission("products.view_product");
+
+  const canViewReports =
+    hasPermission("reports.view_report");
+
+  const canViewCustomers =
+    hasPermission("customers.view_customer");
 
   // ==========================================================
   // USER
@@ -80,70 +102,24 @@ const Dashboard = () => {
     user?.username ||
     "User";
 
-
-  // ==========================================================
-  // ROLE
-  // ==========================================================
-
-  const userRole = String(
-    user?.role_name || ""
-  )
-    .trim()
-    .toLowerCase();
-
-
-  // ==========================================================
-  // ROLE CHECKS
-  // ==========================================================
-
-  const isCashier =
-    userRole === "cashier";
-
-  const isAdmin =
-    userRole === "admin";
-
-  const isOwner =
-    userRole === "owner";
-
-  const isManager =
-    userRole === "manager";
-
-  const isStorekeeper =
-    userRole === "storekeeper";
-
-
-  const isManagement =
-    isAdmin ||
-    isOwner ||
-    isManager;
-
-
   // ==========================================================
   // FORMAT CURRENCY
   // ==========================================================
 
   const formatCurrency = useCallback(
     (value) => {
-
-      const number =
-        Number(value || 0);
-
+      const number = Number(value || 0);
 
       return (
         "TSh " +
-        number.toLocaleString(
-          "en-TZ",
-          {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 2,
-          }
-        )
+        number.toLocaleString("en-TZ", {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 2,
+        })
       );
-
     },
     []
   );
-
 
   // ==========================================================
   // EXTRACT API RESULTS
@@ -151,267 +127,168 @@ const Dashboard = () => {
 
   const extractResults = useCallback(
     (response) => {
-
-      if (
-        Array.isArray(response)
-      ) {
-
+      if (Array.isArray(response)) {
         return response;
-
       }
 
-
-      if (
-        Array.isArray(
-          response?.results
-        )
-      ) {
-
+      if (Array.isArray(response?.results)) {
         return response.results;
-
       }
 
-
-      if (
-        Array.isArray(
-          response?.data
-        )
-      ) {
-
+      if (Array.isArray(response?.data)) {
         return response.data;
-
       }
 
-
-      if (
-        Array.isArray(
-          response?.data?.results
-        )
-      ) {
-
+      if (Array.isArray(response?.data?.results)) {
         return response.data.results;
-
       }
-
 
       return [];
-
     },
     []
   );
-
 
   // ==========================================================
   // LOAD DASHBOARD DATA
   // ==========================================================
 
-  const loadDashboardData =
-    useCallback(
-      async () => {
+  const loadDashboardData = useCallback(
+    async () => {
+      if (!user || !canViewDashboard) {
+        setSales([]);
+        setProducts([]);
+        setLoading(false);
+        return;
+      }
 
-        if (!user) {
-          return;
-        }
+      setLoading(true);
+      setError("");
 
+      try {
+        // ====================================================
+        // SALES
+        // ====================================================
 
-        setLoading(true);
+        if (canViewSales) {
+          try {
+            const response = await salesApi.getAll({
+              page_size: 1000,
+            });
 
-        setError("");
+            const salesData =
+              extractResults(response);
 
-
-        try {
-
-          // ==================================================
-          // SALES
-          // ==================================================
-
-          if (
-            hasPermission(
-              "sales.view_sale"
-            )
-          ) {
-
-            try {
-
-              const response =
-                await salesApi.getAll({
-                  page_size: 1000,
-                });
-
-
-              const salesData =
-                extractResults(
-                  response
-                );
-
-
-              console.log(
-                "Dashboard Sales:",
-                salesData
-              );
-
-
-              console.log(
-                "Dashboard User:",
-                user
-              );
-
-
-              if (
-                salesData.length > 0
-              ) {
-
-                console.log(
-                  "First Sale:",
-                  salesData[0]
-                );
-
-
-                console.log(
-                  "Created By:",
-                  salesData[0]?.created_by
-                );
-
-
-                console.log(
-                  "Created By ID:",
-                  salesData[0]?.created_by_id
-                );
-
-              }
-
-
-              setSales(
-                salesData
-              );
-
-            } catch (salesError) {
-
-              console.error(
-                "Failed to load sales:",
-                salesError
-              );
-
-
-              setSales([]);
-
-            }
-
-          } else {
+            setSales(salesData);
+          } catch (salesError) {
+            console.error(
+              "Failed to load sales:",
+              salesError
+            );
 
             setSales([]);
 
+            // Don't block the entire dashboard because
+            // the sales API failed.
+            setError(
+              salesError?.response?.data?.detail ||
+                salesError?.response?.data?.message ||
+                "Failed to load sales data."
+            );
           }
+        } else {
+          setSales([]);
+        }
 
+        // ====================================================
+        // PRODUCTS
+        // ====================================================
 
-          // ==================================================
-          // PRODUCTS
-          // ==================================================
+        if (canViewProducts) {
+          try {
+            const response =
+              await productApi.getAll({
+                page_size: 1000,
+              });
 
-          if (
-            isManagement ||
-            isStorekeeper
-          ) {
+            const productsData =
+              extractResults(response);
 
-            if (
-              hasPermission(
-                "products.view_product"
-              )
-            ) {
-
-              try {
-
-                const response =
-                  await productApi.getAll({
-                    page_size: 1000,
-                  });
-
-
-                const productsData =
-                  extractResults(
-                    response
-                  );
-
-
-                setProducts(
-                  productsData
-                );
-
-              } catch (productError) {
-
-                console.error(
-                  "Failed to load products:",
-                  productError
-                );
-
-
-                setProducts([]);
-
-              }
-
-            }
-
-          } else {
+            setProducts(productsData);
+          } catch (productError) {
+            console.error(
+              "Failed to load products:",
+              productError
+            );
 
             setProducts([]);
 
+            // Only show this if no previous error exists.
+            setError((currentError) => {
+              if (currentError) {
+                return currentError;
+              }
+
+              return (
+                productError?.response?.data?.detail ||
+                productError?.response?.data?.message ||
+                "Failed to load product data."
+              );
+            });
           }
+        } else {
+          setProducts([]);
+        }
+      } catch (dashboardError) {
+        console.error(
+          "Dashboard error:",
+          dashboardError
+        );
 
-        } catch (dashboardError) {
-
-          console.error(
-            "Dashboard error:",
-            dashboardError
-          );
-
-
-          setError(
-            dashboardError?.response?.data
-              ?.detail ||
-            dashboardError?.response?.data
-              ?.message ||
+        setError(
+          dashboardError?.response?.data?.detail ||
+            dashboardError?.response?.data?.message ||
             dashboardError?.message ||
             "Failed to load dashboard data."
-          );
-
-        } finally {
-
-          setLoading(false);
-
-        }
-
-      },
-      [
-        user,
-        hasPermission,
-        isManagement,
-        isStorekeeper,
-        extractResults,
-      ]
-    );
-
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [
+      user,
+      canViewDashboard,
+      canViewSales,
+      canViewProducts,
+      extractResults,
+    ]
+  );
 
   // ==========================================================
   // LOAD DASHBOARD
   // ==========================================================
 
   useEffect(() => {
-
-    if (
-      !authLoading &&
-      user
-    ) {
-
-      loadDashboardData();
-
+    if (authLoading) {
+      return;
     }
 
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
+    if (!canViewDashboard) {
+      setLoading(false);
+      return;
+    }
+
+    loadDashboardData();
   }, [
     authLoading,
     user,
+    canViewDashboard,
     loadDashboardData,
   ]);
-
 
   // ==========================================================
   // CHECK DATE IS TODAY
@@ -419,11 +296,9 @@ const Dashboard = () => {
 
   const isToday = useCallback(
     (dateValue) => {
-
       if (!dateValue) {
         return false;
       }
-
 
       const saleDate =
         new Date(dateValue);
@@ -431,956 +306,587 @@ const Dashboard = () => {
       const today =
         new Date();
 
-
       if (
         Number.isNaN(
           saleDate.getTime()
         )
       ) {
-
         return false;
-
       }
-
 
       return (
         saleDate.getFullYear() ===
           today.getFullYear() &&
-
         saleDate.getMonth() ===
           today.getMonth() &&
-
         saleDate.getDate() ===
           today.getDate()
       );
-
     },
     []
   );
 
+  // ==========================================================
+  // CHECK COMPLETED SALE
+  // ==========================================================
+
+  const isCompletedSale = useCallback(
+    (sale) => {
+      const status = String(
+        sale?.status || ""
+      )
+        .trim()
+        .toUpperCase();
+
+      return (
+        !sale?.status ||
+        status === "COMPLETED" ||
+        status === "PAID"
+      );
+    },
+    []
+  );
 
   // ==========================================================
   // TODAY'S COMPLETED SALES
   // ==========================================================
 
-  const todaySales =
-    useMemo(() => {
+  const todaySales = useMemo(() => {
+    if (!canViewSales) {
+      return [];
+    }
 
-      return sales.filter(
-        (sale) => {
+    return sales.filter((sale) => {
+      if (!sale?.created_at) {
+        return false;
+      }
 
-          if (
-            !sale?.created_at
-          ) {
-
-            return false;
-
-          }
-
-
-          const status =
-            String(
-              sale?.status || ""
-            )
-              .trim()
-              .toUpperCase();
-
-
-          const completed =
-            !sale?.status ||
-            status === "COMPLETED" ||
-            status === "PAID";
-
-
-          return (
-            isToday(
-              sale.created_at
-            ) &&
-            completed
-          );
-
-        }
+      return (
+        isToday(sale.created_at) &&
+        isCompletedSale(sale)
       );
-
-    }, [
-      sales,
-      isToday,
-    ]);
-
+    });
+  }, [
+    sales,
+    canViewSales,
+    isToday,
+    isCompletedSale,
+  ]);
 
   // ==========================================================
   // GET SALE USER ID
   // ==========================================================
 
-  const getSaleUserId =
-    useCallback(
-      (sale) => {
+  const getSaleUserId = useCallback(
+    (sale) => {
+      if (
+        sale?.created_by_id !== undefined &&
+        sale?.created_by_id !== null
+      ) {
+        return sale.created_by_id;
+      }
 
-        if (
-          sale?.created_by_id !==
-          undefined &&
-          sale?.created_by_id !==
-          null
-        ) {
+      if (
+        sale?.created_by?.id !== undefined &&
+        sale?.created_by?.id !== null
+      ) {
+        return sale.created_by.id;
+      }
 
-          return sale.created_by_id;
+      if (
+        sale?.cashier_id !== undefined &&
+        sale?.cashier_id !== null
+      ) {
+        return sale.cashier_id;
+      }
 
-        }
+      if (
+        sale?.cashier?.id !== undefined &&
+        sale?.cashier?.id !== null
+      ) {
+        return sale.cashier.id;
+      }
 
+      if (
+        sale?.user_id !== undefined &&
+        sale?.user_id !== null
+      ) {
+        return sale.user_id;
+      }
 
-        if (
-          sale?.created_by?.id !==
-          undefined &&
-          sale?.created_by?.id !==
-          null
-        ) {
+      if (
+        sale?.user?.id !== undefined &&
+        sale?.user?.id !== null
+      ) {
+        return sale.user.id;
+      }
 
-          return sale.created_by.id;
-
-        }
-
-
-        if (
-          sale?.cashier_id !==
-          undefined &&
-          sale?.cashier_id !==
-          null
-        ) {
-
-          return sale.cashier_id;
-
-        }
-
-
-        if (
-          sale?.cashier?.id !==
-          undefined &&
-          sale?.cashier?.id !==
-          null
-        ) {
-
-          return sale.cashier.id;
-
-        }
-
-
-        if (
-          sale?.user_id !==
-          undefined &&
-          sale?.user_id !==
-          null
-        ) {
-
-          return sale.user_id;
-
-        }
-
-
-        if (
-          sale?.user?.id !==
-          undefined &&
-          sale?.user?.id !==
-          null
-        ) {
-
-          return sale.user.id;
-
-        }
-
-
-        return null;
-
-      },
-      []
-    );
-
+      return null;
+    },
+    []
+  );
 
   // ==========================================================
   // GET SALE USER NAME
   // ==========================================================
 
-  const getSaleUserName =
-    useCallback(
-      (sale) => {
-
-        if (
-          sale?.created_by_name
-        ) {
-
-          return sale.created_by_name;
-
-        }
-
-
-        if (
-          sale?.cashier_name
-        ) {
-
-          return sale.cashier_name;
-
-        }
-
-
-        if (
-          sale?.user_name
-        ) {
-
-          return sale.user_name;
-
-        }
-
-
-        if (
-          sale?.created_by?.full_name
-        ) {
-
-          return sale.created_by.full_name;
-
-        }
-
-
-        if (
-          sale?.created_by?.username
-        ) {
-
-          return sale.created_by.username;
-
-        }
-
-
-        if (
-          sale?.cashier?.full_name
-        ) {
-
-          return sale.cashier.full_name;
-
-        }
-
-
-        if (
-          sale?.cashier?.username
-        ) {
-
-          return sale.cashier.username;
-
-        }
-
-
-        if (
-          sale?.user?.full_name
-        ) {
-
-          return sale.user.full_name;
-
-        }
-
-
-        if (
-          sale?.user?.username
-        ) {
-
-          return sale.user.username;
-
-        }
-
-
-        return "Unknown Cashier";
-
-      },
-      []
-    );
-
-
-  // ==========================================================
-  // CASHIER'S OWN SALES
-  // ==========================================================
-
-  const mySales =
-    useMemo(() => {
-
-      if (!isCashier) {
-
-        return todaySales;
-
+  const getSaleUserName = useCallback(
+    (sale) => {
+      if (sale?.created_by_name) {
+        return sale.created_by_name;
       }
 
-
-      if (!user?.id) {
-
-        return [];
-
+      if (sale?.cashier_name) {
+        return sale.cashier_name;
       }
 
+      if (sale?.user_name) {
+        return sale.user_name;
+      }
 
-      const currentUserId =
-        String(user.id);
+      if (sale?.created_by?.full_name) {
+        return sale.created_by.full_name;
+      }
 
+      if (sale?.created_by?.username) {
+        return sale.created_by.username;
+      }
 
-      return todaySales.filter(
-        (sale) => {
+      if (sale?.cashier?.full_name) {
+        return sale.cashier.full_name;
+      }
 
-          const saleUserId =
-            getSaleUserId(
-              sale
-            );
+      if (sale?.cashier?.username) {
+        return sale.cashier.username;
+      }
 
+      if (sale?.user?.full_name) {
+        return sale.user.full_name;
+      }
 
-          if (
-            saleUserId === null ||
-            saleUserId === undefined
-          ) {
+      if (sale?.user?.username) {
+        return sale.user.username;
+      }
 
-            return false;
-
-          }
-
-
-          return (
-            String(
-              saleUserId
-            ) ===
-            currentUserId
-          );
-
-        }
-      );
-
-    }, [
-      todaySales,
-      isCashier,
-      user?.id,
-      getSaleUserId,
-    ]);
-
+      return "Unknown Cashier";
+    },
+    []
+  );
 
   // ==========================================================
   // TODAY SALES AMOUNT
   // ==========================================================
 
-  const todaySalesAmount =
-    useMemo(() => {
+  const todaySalesAmount = useMemo(() => {
+    if (!canViewSales) {
+      return 0;
+    }
 
-      return todaySales.reduce(
-        (
-          total,
-          sale
-        ) => {
-
-          return (
-            total +
-            Number(
-              sale?.total || 0
-            )
-          );
-
-        },
-        0
-      );
-
-    }, [
-      todaySales,
-    ]);
-
+    return todaySales.reduce(
+      (total, sale) =>
+        total +
+        Number(sale?.total || 0),
+      0
+    );
+  }, [
+    todaySales,
+    canViewSales,
+  ]);
 
   // ==========================================================
-  // MY SALES AMOUNT
-  // ==========================================================
-
-  const mySalesAmount =
-    useMemo(() => {
-
-      return mySales.reduce(
-        (
-          total,
-          sale
-        ) => {
-
-          return (
-            total +
-            Number(
-              sale?.total || 0
-            )
-          );
-
-        },
-        0
-      );
-
-    }, [
-      mySales,
-    ]);
-
-
-  // ==========================================================
-  // ORDERS
+  // TODAY ORDERS
   // ==========================================================
 
   const todayOrders =
-    todaySales.length;
-
-
-  const myOrders =
-    mySales.length;
-
+    canViewSales
+      ? todaySales.length
+      : 0;
 
   // ==========================================================
   // PROFIT
   // ==========================================================
+  //
+  // Profit is only displayed when the user has reporting
+  // permission.
+  //
+  // ==========================================================
 
-  const todayProfit =
-    useMemo(() => {
+  const todayProfit = useMemo(() => {
+    if (!canViewReports) {
+      return 0;
+    }
 
-      if (
-        !isManagement
-      ) {
+    return todaySales.reduce(
+      (totalProfit, sale) => {
+        const items =
+          Array.isArray(sale?.items)
+            ? sale.items
+            : [];
 
-        return 0;
+        const saleProfit =
+          items.reduce(
+            (
+              itemProfit,
+              item
+            ) => {
+              const quantity =
+                Number(
+                  item?.quantity || 0
+                );
 
-      }
+              const sellingPrice =
+                Number(
+                  item?.unit_price || 0
+                );
 
-
-      return todaySales.reduce(
-        (
-          totalProfit,
-          sale
-        ) => {
-
-          const items =
-            Array.isArray(
-              sale?.items
-            )
-              ? sale.items
-              : [];
-
-
-          const saleProfit =
-            items.reduce(
-              (
-                itemProfit,
-                item
-              ) => {
-
-                const quantity =
-                  Number(
-                    item?.quantity ||
-                    0
-                  );
-
-
-                const sellingPrice =
-                  Number(
-                    item?.unit_price ||
-                    0
-                  );
-
-
-                const costPrice =
-                  Number(
-                    item
-                      ?.product_details
-                      ?.cost_price ||
-
+              const costPrice =
+                Number(
+                  item
+                    ?.product_details
+                    ?.cost_price ||
                     item
                       ?.product
                       ?.cost_price ||
-
                     0
-                  );
-
-
-                return (
-                  itemProfit +
-                  (
-                    sellingPrice -
-                    costPrice
-                  ) *
-                  quantity
                 );
 
-              },
-              0
-            );
-
-
-          return (
-            totalProfit +
-            saleProfit
+              return (
+                itemProfit +
+                (
+                  sellingPrice -
+                  costPrice
+                ) *
+                  quantity
+              );
+            },
+            0
           );
 
-        },
-        0
-      );
-
-    }, [
-      todaySales,
-      isManagement,
-    ]);
-
-
-  // ==========================================================
-  // LOW STOCK
-  // ==========================================================
-
-  const lowStockProducts =
-    useMemo(() => {
-
-      if (
-        !isManagement &&
-        !isStorekeeper
-      ) {
-
-        return [];
-
-      }
-
-
-      return products
-        .filter(
-          (product) => {
-
-            const currentStock =
-              Number(
-                product?.current_stock ??
-                product?.stock ??
-                product?.quantity ??
-                0
-              );
-
-
-            const minimumStock =
-              Number(
-                product?.minimum_stock ??
-                product?.reorder_level ??
-                0
-              );
-
-
-            return (
-              currentStock <=
-              minimumStock
-            );
-
-          }
-        )
-        .sort(
-          (a, b) => {
-
-            const stockA =
-              Number(
-                a?.current_stock ??
-                a?.stock ??
-                a?.quantity ??
-                0
-              );
-
-
-            const stockB =
-              Number(
-                b?.current_stock ??
-                b?.stock ??
-                b?.quantity ??
-                0
-              );
-
-
-            return (
-              stockA -
-              stockB
-            );
-
-          }
-        )
-        .slice(
-          0,
-          5
+        return (
+          totalProfit +
+          saleProfit
         );
+      },
+      0
+    );
+  }, [
+    todaySales,
+    canViewReports,
+  ]);
 
-    }, [
-      products,
-      isManagement,
-      isStorekeeper,
-    ]);
+  // ==========================================================
+  // LOW STOCK PRODUCTS
+  // ==========================================================
 
+  const lowStockProducts = useMemo(() => {
+    if (!canViewProducts) {
+      return [];
+    }
+
+    return products
+      .filter((product) => {
+        const currentStock =
+          Number(
+            product?.current_stock ??
+              product?.stock ??
+              product?.quantity ??
+              0
+          );
+
+        const minimumStock =
+          Number(
+            product?.minimum_stock ??
+              product?.reorder_level ??
+              0
+          );
+
+        return (
+          currentStock <=
+          minimumStock
+        );
+      })
+      .sort((a, b) => {
+        const stockA =
+          Number(
+            a?.current_stock ??
+              a?.stock ??
+              a?.quantity ??
+              0
+          );
+
+        const stockB =
+          Number(
+            b?.current_stock ??
+              b?.stock ??
+              b?.quantity ??
+              0
+          );
+
+        return stockA - stockB;
+      })
+      .slice(0, 5);
+  }, [
+    products,
+    canViewProducts,
+  ]);
 
   const lowStockCount =
     lowStockProducts.length;
-
 
   // ==========================================================
   // SALES CHART DATA
   // ==========================================================
 
-  const salesChartData =
-    useMemo(() => {
+  const salesChartData = useMemo(() => {
+    if (
+      !canViewReports ||
+      !canViewSales
+    ) {
+      return [];
+    }
 
-      if (
-        !isManagement
-      ) {
+    const days =
+      Number(chartPeriod);
 
-        return [];
+    const data = [];
 
-      }
+    for (
+      let i = days - 1;
+      i >= 0;
+      i--
+    ) {
+      const date =
+        new Date();
 
+      date.setHours(
+        0,
+        0,
+        0,
+        0
+      );
 
-      const days =
-        Number(
-          chartPeriod
-        );
+      date.setDate(
+        date.getDate() - i
+      );
 
+      const year =
+        date.getFullYear();
 
-      const data = [];
+      const month =
+        String(
+          date.getMonth() + 1
+        ).padStart(2, "0");
 
+      const day =
+        String(
+          date.getDate()
+        ).padStart(2, "0");
 
-      for (
-        let i = days - 1;
-        i >= 0;
-        i--
-      ) {
+      const dateKey =
+        `${year}-${month}-${day}`;
 
-        const date =
-          new Date();
+      const dailySales =
+        sales.filter((sale) => {
+          if (!sale?.created_at) {
+            return false;
+          }
 
+          const saleDate =
+            new Date(
+              sale.created_at
+            );
 
-        date.setHours(
-          0,
-          0,
-          0,
+          if (
+            Number.isNaN(
+              saleDate.getTime()
+            )
+          ) {
+            return false;
+          }
+
+          const saleYear =
+            saleDate.getFullYear();
+
+          const saleMonth =
+            String(
+              saleDate.getMonth() + 1
+            ).padStart(2, "0");
+
+          const saleDay =
+            String(
+              saleDate.getDate()
+            ).padStart(2, "0");
+
+          const saleDateKey =
+            `${saleYear}-${saleMonth}-${saleDay}`;
+
+          return (
+            saleDateKey ===
+              dateKey &&
+            isCompletedSale(sale)
+          );
+        });
+
+      const totalSales =
+        dailySales.reduce(
+          (total, sale) =>
+            total +
+            Number(
+              sale?.total || 0
+            ),
           0
         );
 
+      data.push({
+        date: dateKey,
+        sales: totalSales,
+        orders:
+          dailySales.length,
+      });
+    }
 
-        date.setDate(
-          date.getDate() - i
-        );
-
-
-        const year =
-          date.getFullYear();
-
-
-        const month =
-          String(
-            date.getMonth() + 1
-          ).padStart(
-            2,
-            "0"
-          );
-
-
-        const day =
-          String(
-            date.getDate()
-          ).padStart(
-            2,
-            "0"
-          );
-
-
-        const dateKey =
-          year +
-          "-" +
-          month +
-          "-" +
-          day;
-
-
-        const dailySales =
-          sales.filter(
-            (sale) => {
-
-              if (
-                !sale?.created_at
-              ) {
-
-                return false;
-
-              }
-
-
-              const saleDate =
-                new Date(
-                  sale.created_at
-                );
-
-
-              if (
-                Number.isNaN(
-                  saleDate.getTime()
-                )
-              ) {
-
-                return false;
-
-              }
-
-
-              const saleYear =
-                saleDate.getFullYear();
-
-
-              const saleMonth =
-                String(
-                  saleDate.getMonth() + 1
-                ).padStart(
-                  2,
-                  "0"
-                );
-
-
-              const saleDay =
-                String(
-                  saleDate.getDate()
-                ).padStart(
-                  2,
-                  "0"
-                );
-
-
-              const saleDateKey =
-                saleYear +
-                "-" +
-                saleMonth +
-                "-" +
-                saleDay;
-
-
-              const status =
-                String(
-                  sale?.status || ""
-                )
-                  .trim()
-                  .toUpperCase();
-
-
-              const completed =
-                !sale?.status ||
-                status === "COMPLETED" ||
-                status === "PAID";
-
-
-              return (
-                saleDateKey ===
-                  dateKey &&
-                completed
-              );
-
-            }
-          );
-
-
-        const totalSales =
-          dailySales.reduce(
-            (
-              total,
-              sale
-            ) => {
-
-              return (
-                total +
-                Number(
-                  sale?.total || 0
-                )
-              );
-
-            },
-            0
-          );
-
-
-        data.push({
-          date: dateKey,
-          sales: totalSales,
-          orders:
-            dailySales.length,
-        });
-
-      }
-
-
-      return data;
-
-    }, [
-      sales,
-      chartPeriod,
-      isManagement,
-    ]);
-
+    return data;
+  }, [
+    sales,
+    chartPeriod,
+    canViewReports,
+    canViewSales,
+    isCompletedSale,
+  ]);
 
   // ==========================================================
   // SALES BY CASHIER
   // ==========================================================
 
-  const salesByCashier =
-    useMemo(() => {
+  const salesByCashier = useMemo(() => {
+    if (
+      !canViewReports ||
+      !canViewSales
+    ) {
+      return [];
+    }
 
-      if (
-        !isManagement
-      ) {
+    const cashierMap = {};
 
-        return [];
+    todaySales.forEach((sale) => {
+      const cashierId =
+        getSaleUserId(sale);
 
+      const cashierName =
+        getSaleUserName(sale);
+
+      const key =
+        cashierId !== null &&
+        cashierId !== undefined
+          ? String(cashierId)
+          : cashierName;
+
+      if (!cashierMap[key]) {
+        cashierMap[key] = {
+          id:
+            cashierId ?? key,
+
+          name:
+            cashierName,
+
+          orders:
+            0,
+
+          sales:
+            0,
+        };
       }
 
+      cashierMap[key].orders += 1;
 
-      const cashierMap = {};
+      cashierMap[key].sales +=
+        Number(
+          sale?.total || 0
+        );
+    });
 
+    return Object.values(
+      cashierMap
+    ).sort(
+      (a, b) =>
+        b.sales - a.sales
+    );
+  }, [
+    todaySales,
+    canViewReports,
+    canViewSales,
+    getSaleUserId,
+    getSaleUserName,
+  ]);
 
-      todaySales.forEach(
-        (sale) => {
+  // ==========================================================
+  // RECENT SALES
+  // ==========================================================
 
-          const cashierId =
-            getSaleUserId(
-              sale
-            );
+  const recentSales = useMemo(() => {
+    if (!canViewSales) {
+      return [];
+    }
 
+    return [...todaySales]
+      .sort((a, b) => {
+        return (
+          new Date(
+            b?.created_at || 0
+          ) -
+          new Date(
+            a?.created_at || 0
+          )
+        );
+      })
+      .slice(0, 5);
+  }, [
+    todaySales,
+    canViewSales,
+  ]);
 
-          const cashierName =
-            getSaleUserName(
-              sale
-            );
+  // ==========================================================
+  // DASHBOARD MESSAGE
+  // ==========================================================
 
+  const dashboardMessage =
+    useMemo(() => {
+      if (
+        canViewSales &&
+        canViewProducts
+      ) {
+        return "Here's today's business overview.";
+      }
 
-          const key =
-            cashierId !== null &&
-            cashierId !== undefined
-              ? String(
-                  cashierId
-                )
-              : cashierName;
+      if (canViewSales) {
+        return "Here's your sales overview.";
+      }
 
+      if (canViewProducts) {
+        return "Here's your inventory overview.";
+      }
 
-          if (
-            !cashierMap[key]
-          ) {
+      if (canViewReports) {
+        return "Here's your business reports overview.";
+      }
 
-            cashierMap[key] = {
-              id:
-                cashierId ??
-                key,
-
-              name:
-                cashierName,
-
-              orders:
-                0,
-
-              sales:
-                0,
-            };
-
-          }
-
-
-          cashierMap[key].orders +=
-            1;
-
-
-          cashierMap[key].sales +=
-            Number(
-              sale?.total ||
-              0
-            );
-
-        }
-      );
-
-
-      return Object.values(
-        cashierMap
-      ).sort(
-        (a, b) =>
-          b.sales -
-          a.sales
-      );
-
+      return "Here's your dashboard overview.";
     }, [
-      todaySales,
-      isManagement,
-      getSaleUserId,
-      getSaleUserName,
+      canViewSales,
+      canViewProducts,
+      canViewReports,
     ]);
 
-
   // ==========================================================
-  // CASHIER STATS
-  // ==========================================================
-
-  const cashierStats = useMemo(
-    () => [
-
-      {
-        title:
-          "My Sales",
-
-        value:
-          formatCurrency(
-            mySalesAmount
-          ),
-
-        change:
-          myOrders +
-          " order" +
-          (
-            myOrders !== 1
-              ? "s"
-              : ""
-          ),
-
-        changeType:
-          "positive",
-
-        icon:
-          "bi-cash-stack",
-
-        iconColor:
-          "primary",
-
-        description:
-          "Your sales today",
-      },
-
-
-      {
-        title:
-          "My Orders",
-
-        value:
-          myOrders.toLocaleString(),
-
-        change:
-          "Today",
-
-        changeType:
-          "positive",
-
-        icon:
-          "bi-cart-check",
-
-        iconColor:
-          "success",
-
-        description:
-          "Orders completed by you",
-      },
-
-    ],
-    [
-      formatCurrency,
-      mySalesAmount,
-      myOrders,
-    ]
-  );
-
-
-  // ==========================================================
-  // MANAGEMENT STATS
+  // SALES STATS
   // ==========================================================
 
-  const managementStats =
-    useMemo(
-      () => [
+  const salesStats = useMemo(
+    () => {
+      const stats = [];
 
-        {
+      if (canViewSales) {
+        stats.push({
           title:
             "Today's Sales",
 
@@ -1409,10 +915,9 @@ const Dashboard = () => {
 
           description:
             "Sales completed today",
-        },
+        });
 
-
-        {
+        stats.push({
           title:
             "Orders",
 
@@ -1433,10 +938,11 @@ const Dashboard = () => {
 
           description:
             "Completed orders today",
-        },
+        });
+      }
 
-
-        {
+      if (canViewReports) {
+        stats.push({
           title:
             "Profit",
 
@@ -1449,7 +955,9 @@ const Dashboard = () => {
             "Today",
 
           changeType:
-            "positive",
+            todayProfit >= 0
+              ? "positive"
+              : "negative",
 
           icon:
             "bi-graph-up-arrow",
@@ -1459,12 +967,13 @@ const Dashboard = () => {
 
           description:
             "Estimated profit today",
-        },
+        });
+      }
 
-
-        {
+      if (canViewProducts) {
+        stats.push({
           title:
-            "Stock Items",
+            "Products",
 
           value:
             products.length.toLocaleString(),
@@ -1488,63 +997,23 @@ const Dashboard = () => {
 
           description:
             "Products in inventory",
-        },
-
-      ],
-      [
-        formatCurrency,
-        todaySalesAmount,
-        todayOrders,
-        todayProfit,
-        products.length,
-        lowStockCount,
-      ]
-    );
-
-
-  // ==========================================================
-  // RECENT CASHIER SALES
-  // ==========================================================
-
-  const recentMySales =
-    useMemo(() => {
-
-      if (
-        !isCashier
-      ) {
-
-        return [];
-
+        });
       }
 
-
-      return [
-        ...mySales
-      ]
-        .sort(
-          (a, b) => {
-
-            return (
-              new Date(
-                b?.created_at || 0
-              ) -
-              new Date(
-                a?.created_at || 0
-              )
-            );
-
-          }
-        )
-        .slice(
-          0,
-          5
-        );
-
-    }, [
-      mySales,
-      isCashier,
-    ]);
-
+      return stats;
+    },
+    [
+      canViewSales,
+      canViewReports,
+      canViewProducts,
+      formatCurrency,
+      todaySalesAmount,
+      todayOrders,
+      todayProfit,
+      products.length,
+      lowStockCount,
+    ]
+  );
 
   // ==========================================================
   // CUSTOM TOOLTIP
@@ -1555,181 +1024,145 @@ const Dashboard = () => {
     payload,
     label,
   }) => {
-
     if (
       !active ||
       !payload ||
       !payload.length
     ) {
-
       return null;
-
     }
 
-
     return (
-
       <div
         style={{
-          background:
-            "#fff",
-
+          background: "#fff",
           border:
             "1px solid #dee2e6",
-
-          borderRadius:
-            "8px",
-
-          padding:
-            "12px",
-
+          borderRadius: "8px",
+          padding: "12px",
           boxShadow:
             "0 4px 12px rgba(0,0,0,0.08)",
         }}
       >
-
         <div
           style={{
-            fontWeight:
-              600,
-
-            marginBottom:
-              "6px",
+            fontWeight: 600,
+            marginBottom: "6px",
           }}
         >
-
           {new Date(
             label
           ).toLocaleDateString(
             "en-TZ",
             {
-              day:
-                "2-digit",
-
-              month:
-                "long",
-
-              year:
-                "numeric",
+              day: "2-digit",
+              month: "long",
+              year: "numeric",
             }
           )}
-
         </div>
 
-
         <div>
-
           Sales:{" "}
-
           <strong>
-
-            {
-              formatCurrency(
-                payload[0]?.value
-              )
-            }
-
+            {formatCurrency(
+              payload[0]?.value
+            )}
           </strong>
-
         </div>
 
-
         <div>
-
           Orders:{" "}
-
           <strong>
-
             {
               payload[0]
                 ?.payload
                 ?.orders || 0
             }
-
           </strong>
-
         </div>
-
       </div>
-
     );
-
   };
-
 
   // ==========================================================
   // AUTH LOADING
   // ==========================================================
 
-  if (
-    authLoading
-  ) {
-
+  if (authLoading) {
     return (
+      <div className="text-center py-5">
+        <Spinner animation="border" />
 
-      <div
-        className="text-center py-5"
-      >
-
-        <Spinner
-          animation="border"
-        />
-
-
-        <div
-          className="mt-2 text-muted"
-        >
-
+        <div className="mt-2 text-muted">
           Loading user...
-
         </div>
-
       </div>
-
     );
-
   }
-
 
   // ==========================================================
   // NO USER
   // ==========================================================
 
   if (!user) {
-
     return (
-
-      <Alert
-        variant="warning"
-      >
-
-        User session could not be
-        loaded. Please login again.
-
+      <Alert variant="warning">
+        User session could not be loaded.
+        Please login again.
       </Alert>
-
     );
-
   }
 
+  // ==========================================================
+  // NO DASHBOARD PERMISSION
+  // ==========================================================
+
+  if (!canViewDashboard) {
+    return (
+      <Alert
+        variant="danger"
+        className="mt-3"
+      >
+        <div className="d-flex align-items-center">
+          <i
+            className="bi bi-shield-lock me-2"
+            style={{
+              fontSize: "20px",
+            }}
+          ></i>
+
+          <div>
+            <strong>
+              Dashboard access denied
+            </strong>
+
+            <div className="small mt-1">
+              Your account does not have
+              the{" "}
+              <code>
+                dashboard.view_dashboard
+              </code>{" "}
+              permission.
+            </div>
+          </div>
+        </div>
+      </Alert>
+    );
+  }
 
   // ==========================================================
   // PAGE
   // ==========================================================
 
   return (
-
-    <div
-      className="dashboard"
-    >
+    <div className="dashboard">
 
       {/* ======================================================
           HEADER
       ====================================================== */}
 
-      <div
-        className="page-header"
-      >
+      <div className="page-header">
 
         <div>
 
@@ -1737,75 +1170,41 @@ const Dashboard = () => {
             Dashboard
           </h2>
 
-
           <p>
-
             Welcome back,{" "}
-
             <strong>
               {userName}
             </strong>
-            .
-
-
-            {" "}
-
-
-            {isCashier
-              ? "Here is your sales overview."
-              : isStorekeeper
-              ? "Here is your inventory overview."
-              : "Here's today's business overview."
-            }
-
+            .{" "}
+            {dashboardMessage}
           </p>
 
         </div>
-
 
         {/* ====================================================
             NEW SALE
         ==================================================== */}
 
-        {(
-          isCashier ||
-          isManagement
-        ) &&
-        hasPermission(
-          "sales.add_sale"
-        ) && (
-
+        {canCreateSale && (
           <button
             type="button"
             className="primary-button"
             onClick={() =>
-              navigate(
-                "/pos"
-              )
+              navigate("/pos")
             }
           >
-
-            <i
-              className="bi bi-plus-lg"
-            ></i>
-
-            {" "}
-
+            <i className="bi bi-plus-lg"></i>{" "}
             New Sale
-
           </button>
-
         )}
 
       </div>
-
 
       {/* ======================================================
           ERROR
       ====================================================== */}
 
       {error && (
-
         <Alert
           variant="danger"
           dismissible
@@ -1813,70 +1212,54 @@ const Dashboard = () => {
             setError("")
           }
         >
-
           {error}
-
         </Alert>
-
       )}
-
 
       {/* ======================================================
           LOADING
       ====================================================== */}
 
       {loading && (
+        <div className="text-center py-4">
 
-        <div
-          className="text-center py-4"
-        >
+          <Spinner animation="border" />
 
-          <Spinner
-            animation="border"
-          />
-
-
-          <div
-            className="mt-2 text-muted"
-          >
-
+          <div className="mt-2 text-muted">
             Loading dashboard...
-
           </div>
 
         </div>
-
       )}
 
-
       {/* ======================================================
-          CASHIER DASHBOARD
-      ====================================================== */}
+          STATS
+          ====================================================== */}
 
       {!loading &&
-      isCashier && (
+        salesStats.length > 0 && (
+          <Row className="g-3">
 
-        <>
-
-          {/* ==================================================
-              CASHIER STATS
-          ================================================== */}
-
-          <Row
-            className="g-3"
-          >
-
-            {cashierStats.map(
+            {salesStats.map(
               (stat) => (
-
                 <Col
-                  xl={4}
-                  lg={4}
+                  xl={
+                    salesStats.length >= 4
+                      ? 3
+                      : salesStats.length === 3
+                      ? 4
+                      : 6
+                  }
+                  lg={
+                    salesStats.length >= 4
+                      ? 3
+                      : salesStats.length === 3
+                      ? 4
+                      : 6
+                  }
                   md={6}
                   sm={12}
-                  key={
-                    stat.title
-                  }
+                  key={stat.title}
                 >
 
                   <StatCard
@@ -1910,85 +1293,75 @@ const Dashboard = () => {
                   />
 
                 </Col>
-
               )
             )}
 
           </Row>
+        )}
 
+      {/* ======================================================
+          SALES CONTENT
+      ====================================================== */}
 
-          {/* ==================================================
-              CASHIER CONTENT
-          ================================================== */}
-
-          <Row
-            className="g-3 mt-1"
-          >
+      {!loading &&
+        canViewSales && (
+          <Row className="g-3 mt-1">
 
             {/* =================================================
                 RECENT SALES
             ================================================= */}
 
             <Col
-              xl={8}
-              lg={8}
+              xl={
+                canViewProducts ||
+                canViewReports
+                  ? 8
+                  : 12
+              }
+              lg={
+                canViewProducts ||
+                canViewReports
+                  ? 8
+                  : 12
+              }
               md={12}
             >
 
-              <Card
-                className="dashboard-card border-0 h-100"
-              >
+              <Card className="dashboard-card border-0 h-100">
 
                 <Card.Body>
 
-                  <div
-                    className="card-heading"
-                  >
+                  <div className="card-heading">
 
                     <div>
 
                       <h5>
-                        My Recent Sales
+                        Recent Sales
                       </h5>
 
-
                       <span>
-                        Your latest
-                        transactions
+                        Latest transactions
+                        recorded today
                       </span>
 
                     </div>
 
-
-                    {hasPermission(
-                      "sales.view_sale"
-                    ) && (
-
-                      <button
-                        type="button"
-                        className="btn btn-sm btn-light"
-                        onClick={() =>
-                          navigate(
-                            "/sales"
-                          )
-                        }
-                      >
-
-                        View All
-
-                      </button>
-
-                    )}
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-light"
+                      onClick={() =>
+                        navigate(
+                          "/sales"
+                        )
+                      }
+                    >
+                      View All
+                    </button>
 
                   </div>
 
-
-                  {recentMySales.length ===
-                  0 ? (
-
-                    <div
-                      className="text-center text-muted py-5"
-                    >
+                  {recentSales.length === 0 ? (
+                    <div className="text-center text-muted py-5">
 
                       <i
                         className="bi bi-receipt"
@@ -1998,21 +1371,12 @@ const Dashboard = () => {
                         }}
                       ></i>
 
-
-                      <div
-                        className="mt-2"
-                      >
-
+                      <div className="mt-2">
                         No sales recorded
                         today.
-
                       </div>
 
-
-                      {hasPermission(
-                        "sales.add_sale"
-                      ) && (
-
+                      {canCreateSale && (
                         <button
                           type="button"
                           className="primary-button mt-3"
@@ -2022,31 +1386,18 @@ const Dashboard = () => {
                             )
                           }
                         >
-
-                          <i className="bi bi-cart-plus"></i>
-
-                          {" "}
-
+                          <i className="bi bi-cart-plus"></i>{" "}
                           Start New Sale
-
                         </button>
-
                       )}
 
                     </div>
-
                   ) : (
+                    <div className="table-responsive mt-3">
 
-                    <div
-                      className="table-responsive mt-3"
-                    >
-
-                      <table
-                        className="table align-middle"
-                      >
+                      <table className="table align-middle">
 
                         <thead>
-
                           <tr>
 
                             <th>
@@ -2070,13 +1421,11 @@ const Dashboard = () => {
                             </th>
 
                           </tr>
-
                         </thead>
-
 
                         <tbody>
 
-                          {recentMySales.map(
+                          {recentSales.map(
                             (sale) => {
 
                               const invoice =
@@ -2086,14 +1435,10 @@ const Dashboard = () => {
                                 sale?.id ||
                                 "-";
 
-
                               const customer =
-                                sale
-                                  ?.customer
-                                  ?.name ||
+                                sale?.customer?.name ||
                                 sale?.customer_name ||
                                 "Walk-in Customer";
-
 
                               const time =
                                 sale?.created_at
@@ -2104,83 +1449,56 @@ const Dashboard = () => {
                                       {
                                         hour:
                                           "2-digit",
-
                                         minute:
                                           "2-digit",
                                       }
                                     )
                                   : "-";
 
-
                               const status =
                                 String(
                                   sale?.status ||
-                                  "Completed"
+                                    "Completed"
                                 );
 
-
                               return (
-
                                 <tr
                                   key={
-                                    sale?.id
+                                    sale?.id ??
+                                    invoice
                                   }
                                 >
 
                                   <td>
-
                                     <strong>
-                                      {
-                                        invoice
-                                      }
+                                      {invoice}
                                     </strong>
-
                                   </td>
-
 
                                   <td>
                                     {time}
                                   </td>
 
-
                                   <td>
                                     {customer}
                                   </td>
 
-
                                   <td>
-
                                     <strong>
-
-                                      {
-                                        formatCurrency(
-                                          sale?.total
-                                        )
-                                      }
-
+                                      {formatCurrency(
+                                        sale?.total
+                                      )}
                                     </strong>
-
                                   </td>
 
-
                                   <td>
-
-                                    <Badge
-                                      bg="success"
-                                    >
-
-                                      {
-                                        status
-                                      }
-
+                                    <Badge bg="success">
+                                      {status}
                                     </Badge>
-
                                   </td>
 
                                 </tr>
-
                               );
-
                             }
                           )}
 
@@ -2189,7 +1507,6 @@ const Dashboard = () => {
                       </table>
 
                     </div>
-
                   )}
 
                 </Card.Body>
@@ -2198,26 +1515,31 @@ const Dashboard = () => {
 
             </Col>
 
-
             {/* =================================================
                 QUICK ACTIONS
             ================================================= */}
 
             <Col
-              xl={4}
-              lg={4}
+              xl={
+                canViewProducts ||
+                canViewReports
+                  ? 4
+                  : 12
+              }
+              lg={
+                canViewProducts ||
+                canViewReports
+                  ? 4
+                  : 12
+              }
               md={12}
             >
 
-              <Card
-                className="dashboard-card border-0 h-100"
-              >
+              <Card className="dashboard-card border-0 h-100">
 
                 <Card.Body>
 
-                  <div
-                    className="card-heading"
-                  >
+                  <div className="card-heading">
 
                     <div>
 
@@ -2225,26 +1547,21 @@ const Dashboard = () => {
                         Quick Actions
                       </h5>
 
-
                       <span>
-                        Common cashier tasks
+                        Available actions
                       </span>
 
                     </div>
 
                   </div>
 
+                  <div className="quick-action-list">
 
-                  <div
-                    className="quick-action-list"
-                  >
+                    {/* =========================================
+                        NEW SALE
+                    ========================================= */}
 
-                    {/* NEW SALE */}
-
-                    {hasPermission(
-                      "sales.add_sale"
-                    ) && (
-
+                    {canCreateSale && (
                       <div
                         className="quick-action mb-3"
                         style={{
@@ -2258,21 +1575,17 @@ const Dashboard = () => {
                         }
                       >
 
-                        <div
-                          className="quick-action-icon"
-                        >
+                        <div className="quick-action-icon">
 
                           <i className="bi bi-cart-plus"></i>
 
                         </div>
-
 
                         <div>
 
                           <strong>
                             New Sale
                           </strong>
-
 
                           <small>
                             Create a new
@@ -2282,16 +1595,13 @@ const Dashboard = () => {
                         </div>
 
                       </div>
-
                     )}
 
+                    {/* =========================================
+                        SALES
+                    ========================================= */}
 
-                    {/* SALES */}
-
-                    {hasPermission(
-                      "sales.view_sale"
-                    ) && (
-
+                    {canViewSales && (
                       <div
                         className="quick-action mb-3"
                         style={{
@@ -2305,21 +1615,17 @@ const Dashboard = () => {
                         }
                       >
 
-                        <div
-                          className="quick-action-icon"
-                        >
+                        <div className="quick-action-icon">
 
                           <i className="bi bi-receipt"></i>
 
                         </div>
 
-
                         <div>
 
                           <strong>
-                            My Sales
+                            Sales
                           </strong>
-
 
                           <small>
                             View sales
@@ -2329,332 +1635,85 @@ const Dashboard = () => {
                         </div>
 
                       </div>
-
                     )}
 
+                    {/* =========================================
+                        PRODUCTS
+                    ========================================= */}
 
-                    {/* CUSTOMERS */}
-
-                    <div
-                      className="quick-action mb-3"
-                      style={{
-                        cursor:
-                          "pointer",
-                      }}
-                      onClick={() =>
-                        navigate(
-                          "/customers"
-                        )
-                      }
-                    >
-
+                    {canViewProducts && (
                       <div
-                        className="quick-action-icon"
-                      >
-
-                        <i className="bi bi-people"></i>
-
-                      </div>
-
-
-                      <div>
-
-                        <strong>
-                          Customers
-                        </strong>
-
-
-                        <small>
-                          View customers
-                        </small>
-
-                      </div>
-
-                    </div>
-
-                  </div>
-
-                </Card.Body>
-
-              </Card>
-
-            </Col>
-
-          </Row>
-
-        </>
-
-      )}
-
-
-      {/* ======================================================
-          MANAGEMENT DASHBOARD
-      ====================================================== */}
-
-      {!loading &&
-      isManagement && (
-
-        <>
-
-          {/* ==================================================
-              MANAGEMENT STATS
-          ================================================== */}
-
-          <Row
-            className="g-3"
-          >
-
-            {managementStats.map(
-              (stat) => (
-
-                <Col
-                  xl={3}
-                  lg={3}
-                  md={6}
-                  sm={12}
-                  key={
-                    stat.title
-                  }
-                >
-
-                  <StatCard
-                    title={
-                      stat.title
-                    }
-
-                    value={
-                      stat.value
-                    }
-
-                    change={
-                      stat.change
-                    }
-
-                    changeType={
-                      stat.changeType
-                    }
-
-                    icon={
-                      stat.icon
-                    }
-
-                    iconColor={
-                      stat.iconColor
-                    }
-
-                    description={
-                      stat.description
-                    }
-                  />
-
-                </Col>
-
-              )
-            )}
-
-          </Row>
-
-
-          {/* ==================================================
-              CHART + LOW STOCK
-          ================================================== */}
-
-          <Row
-            className="g-3 mt-1"
-          >
-
-            {/* =================================================
-                SALES CHART
-            ================================================= */}
-
-            <Col
-              xl={8}
-              lg={8}
-              md={12}
-            >
-
-              <Card
-                className="dashboard-card border-0 h-100"
-              >
-
-                <Card.Body>
-
-                  <div
-                    className="card-heading"
-                  >
-
-                    <div>
-
-                      <h5>
-                        Sales Overview
-                      </h5>
-
-
-                      <span>
-                        Sales performance
-                      </span>
-
-                    </div>
-
-
-                    <select
-                      className="form-select form-select-sm"
-                      value={
-                        chartPeriod
-                      }
-                      onChange={(e) =>
-                        setChartPeriod(
-                          e.target.value
-                        )
-                      }
-                      style={{
-                        width:
-                          "150px",
-                      }}
-                    >
-
-                      <option value="7">
-                        Last 7 days
-                      </option>
-
-
-                      <option value="30">
-                        Last 30 days
-                      </option>
-
-
-                      <option value="365">
-                        This year
-                      </option>
-
-                    </select>
-
-                  </div>
-
-
-                  <div
-                    style={{
-                      width:
-                        "100%",
-
-                      height:
-                        "350px",
-
-                      marginTop:
-                        "20px",
-                    }}
-                  >
-
-                    <ResponsiveContainer
-                      width="100%"
-                      height="100%"
-                    >
-
-                      <BarChart
-                        data={
-                          salesChartData
+                        className="quick-action mb-3"
+                        style={{
+                          cursor:
+                            "pointer",
+                        }}
+                        onClick={() =>
+                          navigate(
+                            "/products"
+                          )
                         }
                       >
 
-                        <CartesianGrid
-                          strokeDasharray="3 3"
-                        />
+                        <div className="quick-action-icon">
 
+                          <i className="bi bi-box-seam"></i>
 
-                        <XAxis
-                          dataKey="date"
-                          tickFormatter={(
-                            value
-                          ) =>
-                            new Date(
-                              value
-                            ).toLocaleDateString(
-                              "en-TZ",
-                              {
-                                day:
-                                  "2-digit",
+                        </div>
 
-                                month:
-                                  "short",
-                              }
-                            )
-                          }
-                        />
+                        <div>
 
+                          <strong>
+                            Products
+                          </strong>
 
-                        <YAxis
-                          tickFormatter={(
-                            value
-                          ) => {
+                          <small>
+                            Manage inventory
+                          </small>
 
-                            if (
-                              value >=
-                              1000000
-                            ) {
+                        </div>
 
-                              return (
-                                "TSh " +
-                                (
-                                  value /
-                                  1000000
-                                ).toFixed(
-                                  1
-                                ) +
-                                "M"
-                              );
+                      </div>
+                    )}
 
-                            }
+                    {/* =========================================
+                        CUSTOMERS
+                    ========================================= */}
 
+                    {canViewCustomers && (
+                      <div
+                        className="quick-action mb-3"
+                        style={{
+                          cursor:
+                            "pointer",
+                        }}
+                        onClick={() =>
+                          navigate(
+                            "/customers"
+                          )
+                        }
+                      >
 
-                            if (
-                              value >=
-                              1000
-                            ) {
+                        <div className="quick-action-icon">
 
-                              return (
-                                "TSh " +
-                                (
-                                  value /
-                                  1000
-                                ).toFixed(
-                                  0
-                                ) +
-                                "K"
-                              );
+                          <i className="bi bi-people"></i>
 
-                            }
+                        </div>
 
+                        <div>
 
-                            return (
-                              "TSh " +
-                              value
-                            );
+                          <strong>
+                            Customers
+                          </strong>
 
-                          }}
-                        />
+                          <small>
+                            View customers
+                          </small>
 
+                        </div>
 
-                        <Tooltip
-                          content={
-                            <CustomTooltip />
-                          }
-                        />
-
-
-                        <Bar
-                          dataKey="sales"
-                          name="Sales"
-                          radius={[
-                            6,
-                            6,
-                            0,
-                            0,
-                          ]}
-                        />
-
-                      </BarChart>
-
-                    </ResponsiveContainer>
+                      </div>
+                    )}
 
                   </div>
 
@@ -2664,26 +1723,602 @@ const Dashboard = () => {
 
             </Col>
 
+          </Row>
+        )}
 
-            {/* =================================================
-                LOW STOCK
-            ================================================= */}
+      {/* ======================================================
+          REPORTING SECTION
+      ====================================================== */}
 
-            <Col
-              xl={4}
-              lg={4}
-              md={12}
-            >
+      {!loading &&
+        canViewReports && (
+          <>
 
-              <Card
-                className="dashboard-card border-0 h-100"
-              >
+            {/* ==================================================
+                SALES CHART + LOW STOCK
+            ================================================== */}
+
+            <Row className="g-3 mt-1">
+
+              {/* =================================================
+                  SALES CHART
+              ================================================= */}
+
+              {canViewSales && (
+                <Col
+                  xl={
+                    canViewProducts
+                      ? 8
+                      : 12
+                  }
+                  lg={
+                    canViewProducts
+                      ? 8
+                      : 12
+                  }
+                  md={12}
+                >
+
+                  <Card className="dashboard-card border-0 h-100">
+
+                    <Card.Body>
+
+                      <div className="card-heading">
+
+                        <div>
+
+                          <h5>
+                            Sales Overview
+                          </h5>
+
+                          <span>
+                            Sales performance
+                          </span>
+
+                        </div>
+
+                        <select
+                          className="form-select form-select-sm"
+                          value={
+                            chartPeriod
+                          }
+                          onChange={(e) =>
+                            setChartPeriod(
+                              e.target.value
+                            )
+                          }
+                          style={{
+                            width:
+                              "150px",
+                          }}
+                        >
+
+                          <option value="7">
+                            Last 7 days
+                          </option>
+
+                          <option value="30">
+                            Last 30 days
+                          </option>
+
+                          <option value="365">
+                            This year
+                          </option>
+
+                        </select>
+
+                      </div>
+
+                      <div
+                        style={{
+                          width:
+                            "100%",
+                          height:
+                            "350px",
+                          marginTop:
+                            "20px",
+                        }}
+                      >
+
+                        <ResponsiveContainer
+                          width="100%"
+                          height="100%"
+                        >
+
+                          <BarChart
+                            data={
+                              salesChartData
+                            }
+                          >
+
+                            <CartesianGrid
+                              strokeDasharray="3 3"
+                            />
+
+                            <XAxis
+                              dataKey="date"
+                              tickFormatter={(
+                                value
+                              ) =>
+                                new Date(
+                                  value
+                                ).toLocaleDateString(
+                                  "en-TZ",
+                                  {
+                                    day:
+                                      "2-digit",
+                                    month:
+                                      "short",
+                                  }
+                                )
+                              }
+                            />
+
+                            <YAxis
+                              tickFormatter={(
+                                value
+                              ) => {
+
+                                if (
+                                  value >=
+                                  1000000
+                                ) {
+                                  return (
+                                    "TSh " +
+                                    (
+                                      value /
+                                      1000000
+                                    ).toFixed(
+                                      1
+                                    ) +
+                                    "M"
+                                  );
+                                }
+
+                                if (
+                                  value >=
+                                  1000
+                                ) {
+                                  return (
+                                    "TSh " +
+                                    (
+                                      value /
+                                      1000
+                                    ).toFixed(
+                                      0
+                                    ) +
+                                    "K"
+                                  );
+                                }
+
+                                return (
+                                  "TSh " +
+                                  value
+                                );
+                              }}
+                            />
+
+                            <Tooltip
+                              content={
+                                <CustomTooltip />
+                              }
+                            />
+
+                            <Bar
+                              dataKey="sales"
+                              name="Sales"
+                              radius={[
+                                6,
+                                6,
+                                0,
+                                0,
+                              ]}
+                            />
+
+                          </BarChart>
+
+                        </ResponsiveContainer>
+
+                      </div>
+
+                    </Card.Body>
+
+                  </Card>
+
+                </Col>
+              )}
+
+              {/* =================================================
+                  LOW STOCK
+              ================================================= */}
+
+              {canViewProducts && (
+                <Col
+                  xl={
+                    canViewSales
+                      ? 4
+                      : 12
+                  }
+                  lg={
+                    canViewSales
+                      ? 4
+                      : 12
+                  }
+                  md={12}
+                >
+
+                  <Card className="dashboard-card border-0 h-100">
+
+                    <Card.Body>
+
+                      <div className="card-heading">
+
+                        <div>
+
+                          <h5>
+                            Low Stock
+                          </h5>
+
+                          <span>
+                            Items requiring
+                            attention
+                          </span>
+
+                        </div>
+
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-light"
+                          onClick={() =>
+                            navigate(
+                              "/products"
+                            )
+                          }
+                        >
+                          View All
+                        </button>
+
+                      </div>
+
+                      {lowStockProducts.length === 0 ? (
+                        <div className="text-center text-muted py-5">
+
+                          <i className="bi bi-check-circle fs-4 text-success"></i>
+
+                          <div className="mt-2">
+                            All products have
+                            sufficient stock.
+                          </div>
+
+                        </div>
+                      ) : (
+                        <div className="low-stock-list">
+
+                          {lowStockProducts.map(
+                            (product) => {
+
+                              const currentStock =
+                                Number(
+                                  product?.current_stock ??
+                                    product?.stock ??
+                                    product?.quantity ??
+                                    0
+                                );
+
+                              const minimumStock =
+                                Number(
+                                  product?.minimum_stock ??
+                                    product?.reorder_level ??
+                                    0
+                                );
+
+                              return (
+                                <div
+                                  className="stock-item"
+                                  key={
+                                    product?.id
+                                  }
+                                >
+
+                                  <div className="stock-icon">
+
+                                    <i className="bi bi-box"></i>
+
+                                  </div>
+
+                                  <div className="stock-info">
+
+                                    <strong>
+                                      {
+                                        product?.name ||
+                                        "Unnamed Product"
+                                      }
+                                    </strong>
+
+                                    <small>
+                                      {
+                                        currentStock
+                                      }
+                                      {" • "}
+                                      Min:{" "}
+                                      {
+                                        minimumStock
+                                      }
+                                    </small>
+
+                                  </div>
+
+                                  <i className="bi bi-exclamation-circle text-warning"></i>
+
+                                </div>
+                              );
+                            }
+                          )}
+
+                        </div>
+                      )}
+
+                    </Card.Body>
+
+                  </Card>
+
+                </Col>
+              )}
+
+            </Row>
+
+            {/* ==================================================
+                SALES BY CASHIER
+            ================================================== */}
+
+            {canViewSales && (
+              <Row className="g-3 mt-1">
+
+                <Col
+                  xl={12}
+                  lg={12}
+                  md={12}
+                >
+
+                  <Card className="dashboard-card border-0">
+
+                    <Card.Body>
+
+                      <div className="card-heading">
+
+                        <div>
+
+                          <h5>
+                            Sales by Cashier
+                          </h5>
+
+                          <span>
+                            Today's sales
+                            performance by cashier
+                          </span>
+
+                        </div>
+
+                      </div>
+
+                      {salesByCashier.length === 0 ? (
+                        <div className="text-center text-muted py-5">
+
+                          <i
+                            className="bi bi-receipt"
+                            style={{
+                              fontSize:
+                                "40px",
+                            }}
+                          ></i>
+
+                          <div className="mt-2">
+                            No cashier sales
+                            recorded today.
+                          </div>
+
+                        </div>
+                      ) : (
+                        <div className="table-responsive mt-3">
+
+                          <table className="table table-hover align-middle">
+
+                            <thead>
+
+                              <tr>
+
+                                <th>
+                                  #
+                                </th>
+
+                                <th>
+                                  Cashier
+                                </th>
+
+                                <th>
+                                  Orders
+                                </th>
+
+                                <th>
+                                  Sales
+                                </th>
+
+                                <th>
+                                  Average Order
+                                </th>
+
+                              </tr>
+
+                            </thead>
+
+                            <tbody>
+
+                              {salesByCashier.map(
+                                (
+                                  cashier,
+                                  index
+                                ) => {
+
+                                  const average =
+                                    cashier.orders >
+                                    0
+                                      ? cashier.sales /
+                                        cashier.orders
+                                      : 0;
+
+                                  return (
+                                    <tr
+                                      key={
+                                        cashier.id
+                                      }
+                                    >
+
+                                      <td>
+                                        {
+                                          index +
+                                          1
+                                        }
+                                      </td>
+
+                                      <td>
+                                        <strong>
+                                          {
+                                            cashier.name
+                                          }
+                                        </strong>
+                                      </td>
+
+                                      <td>
+
+                                        <Badge bg="secondary">
+
+                                          {
+                                            cashier.orders
+                                          }
+
+                                        </Badge>
+
+                                      </td>
+
+                                      <td>
+
+                                        <strong>
+
+                                          {
+                                            formatCurrency(
+                                              cashier.sales
+                                            )
+                                          }
+
+                                        </strong>
+
+                                      </td>
+
+                                      <td>
+
+                                        {
+                                          formatCurrency(
+                                            average
+                                          )
+                                        }
+
+                                      </td>
+
+                                    </tr>
+                                  );
+                                }
+                              )}
+
+                            </tbody>
+
+                            <tfoot>
+
+                              <tr>
+
+                                <th colSpan="2">
+                                  Total
+                                </th>
+
+                                <th>
+
+                                  {
+                                    salesByCashier.reduce(
+                                      (
+                                        total,
+                                        cashier
+                                      ) =>
+                                        total +
+                                        cashier.orders,
+                                      0
+                                    )
+                                  }
+
+                                </th>
+
+                                <th>
+
+                                  <strong>
+
+                                    {
+                                      formatCurrency(
+                                        salesByCashier.reduce(
+                                          (
+                                            total,
+                                            cashier
+                                          ) =>
+                                            total +
+                                            cashier.sales,
+                                          0
+                                        )
+                                      )
+                                    }
+
+                                  </strong>
+
+                                </th>
+
+                                <th>
+                                  -
+                                </th>
+
+                              </tr>
+
+                            </tfoot>
+
+                          </table>
+
+                        </div>
+                      )}
+
+                    </Card.Body>
+
+                  </Card>
+
+                </Col>
+
+              </Row>
+            )}
+
+          </>
+        )}
+
+      {/* ======================================================
+          INVENTORY-ONLY SECTION
+      ====================================================== */}
+
+      {!loading &&
+        canViewProducts &&
+        !canViewReports &&
+        (
+          <Row className="g-3 mt-1">
+
+            <Col xl={12}>
+
+              <Card className="dashboard-card border-0">
 
                 <Card.Body>
 
-                  <div
-                    className="card-heading"
-                  >
+                  <div className="card-heading">
 
                     <div>
 
@@ -2691,14 +2326,12 @@ const Dashboard = () => {
                         Low Stock
                       </h5>
 
-
                       <span>
-                        Items requiring
+                        Products requiring
                         attention
                       </span>
 
                     </div>
-
 
                     <button
                       type="button"
@@ -2709,40 +2342,24 @@ const Dashboard = () => {
                         )
                       }
                     >
-
-                      View All
-
+                      View Products
                     </button>
 
                   </div>
 
-
-                  {lowStockProducts.length ===
-                  0 ? (
-
-                    <div
-                      className="text-center text-muted py-5"
-                    >
+                  {lowStockProducts.length === 0 ? (
+                    <div className="text-center text-muted py-5">
 
                       <i className="bi bi-check-circle fs-4 text-success"></i>
 
-
-                      <div
-                        className="mt-2"
-                      >
-
-                        All products have
-                        sufficient stock.
-
+                      <div className="mt-2">
+                        Stock levels are
+                        healthy.
                       </div>
 
                     </div>
-
                   ) : (
-
-                    <div
-                      className="low-stock-list"
-                    >
+                    <div className="low-stock-list mt-3">
 
                       {lowStockProducts.map(
                         (product) => {
@@ -2750,22 +2367,19 @@ const Dashboard = () => {
                           const currentStock =
                             Number(
                               product?.current_stock ??
-                              product?.stock ??
-                              product?.quantity ??
-                              0
+                                product?.stock ??
+                                product?.quantity ??
+                                0
                             );
-
 
                           const minimumStock =
                             Number(
                               product?.minimum_stock ??
-                              product?.reorder_level ??
-                              0
+                                product?.reorder_level ??
+                                0
                             );
 
-
                           return (
-
                             <div
                               className="stock-item"
                               key={
@@ -2773,56 +2387,43 @@ const Dashboard = () => {
                               }
                             >
 
-                              <div
-                                className="stock-icon"
-                              >
+                              <div className="stock-icon">
 
                                 <i className="bi bi-box"></i>
 
                               </div>
 
-
-                              <div
-                                className="stock-info"
-                              >
+                              <div className="stock-info">
 
                                 <strong>
                                   {
-                                    product?.name
+                                    product?.name ||
+                                    "Unnamed Product"
                                   }
                                 </strong>
 
-
                                 <small>
-
+                                  Current:{" "}
                                   {
                                     currentStock
                                   }
-
                                   {" • "}
-
-                                  Min:{" "}
-
+                                  Minimum:{" "}
                                   {
                                     minimumStock
                                   }
-
                                 </small>
 
                               </div>
 
-
                               <i className="bi bi-exclamation-circle text-warning"></i>
 
                             </div>
-
                           );
-
                         }
                       )}
 
                     </div>
-
                   )}
 
                 </Card.Body>
@@ -2832,501 +2433,10 @@ const Dashboard = () => {
             </Col>
 
           </Row>
-
-
-          {/* ==================================================
-              SALES BY CASHIER
-          ================================================== */}
-
-          <Row
-            className="g-3 mt-1"
-          >
-
-            <Col
-              xl={12}
-              lg={12}
-              md={12}
-            >
-
-              <Card
-                className="dashboard-card border-0"
-              >
-
-                <Card.Body>
-
-                  <div
-                    className="card-heading"
-                  >
-
-                    <div>
-
-                      <h5>
-                        Sales by Cashier
-                      </h5>
-
-
-                      <span>
-                        Today's sales
-                        performance by cashier
-                      </span>
-
-                    </div>
-
-                  </div>
-
-
-                  {salesByCashier.length ===
-                  0 ? (
-
-                    <div
-                      className="text-center text-muted py-5"
-                    >
-
-                      <i
-                        className="bi bi-receipt"
-                        style={{
-                          fontSize:
-                            "40px",
-                        }}
-                      ></i>
-
-
-                      <div
-                        className="mt-2"
-                      >
-
-                        No cashier sales
-                        recorded today.
-
-                      </div>
-
-                    </div>
-
-                  ) : (
-
-                    <div
-                      className="table-responsive mt-3"
-                    >
-
-                      <table
-                        className="table table-hover align-middle"
-                      >
-
-                        <thead>
-
-                          <tr>
-
-                            <th>
-                              #
-                            </th>
-
-                            <th>
-                              Cashier
-                            </th>
-
-                            <th>
-                              Orders
-                            </th>
-
-                            <th>
-                              Sales
-                            </th>
-
-                            <th>
-                              Average Order
-                            </th>
-
-                          </tr>
-
-                        </thead>
-
-
-                        <tbody>
-
-                          {salesByCashier.map(
-                            (
-                              cashier,
-                              index
-                            ) => {
-
-                              const average =
-                                cashier.orders >
-                                0
-                                  ? cashier.sales /
-                                    cashier.orders
-                                  : 0;
-
-
-                              return (
-
-                                <tr
-                                  key={
-                                    cashier.id
-                                  }
-                                >
-
-                                  <td>
-                                    {
-                                      index +
-                                      1
-                                    }
-                                  </td>
-
-
-                                  <td>
-
-                                    <strong>
-
-                                      {
-                                        cashier.name
-                                      }
-
-                                    </strong>
-
-                                  </td>
-
-
-                                  <td>
-
-                                    <Badge
-                                      bg="secondary"
-                                    >
-
-                                      {
-                                        cashier.orders
-                                      }
-
-                                    </Badge>
-
-                                  </td>
-
-
-                                  <td>
-
-                                    <strong>
-
-                                      {
-                                        formatCurrency(
-                                          cashier.sales
-                                        )
-                                      }
-
-                                    </strong>
-
-                                  </td>
-
-
-                                  <td>
-
-                                    {
-                                      formatCurrency(
-                                        average
-                                      )
-                                    }
-
-                                  </td>
-
-                                </tr>
-
-                              );
-
-                            }
-                          )}
-
-                        </tbody>
-
-
-                        <tfoot>
-
-                          <tr>
-
-                            <th
-                              colSpan="2"
-                            >
-
-                              Total
-
-                            </th>
-
-
-                            <th>
-
-                              {
-                                salesByCashier.reduce(
-                                  (
-                                    total,
-                                    cashier
-                                  ) =>
-                                    total +
-                                    cashier.orders,
-                                  0
-                                )
-                              }
-
-                            </th>
-
-
-                            <th>
-
-                              <strong>
-
-                                {
-                                  formatCurrency(
-                                    salesByCashier.reduce(
-                                      (
-                                        total,
-                                        cashier
-                                      ) =>
-                                        total +
-                                        cashier.sales,
-                                      0
-                                    )
-                                  )
-                                }
-
-                              </strong>
-
-                            </th>
-
-
-                            <th>
-                              -
-                            </th>
-
-                          </tr>
-
-                        </tfoot>
-
-                      </table>
-
-                    </div>
-
-                  )}
-
-                </Card.Body>
-
-              </Card>
-
-            </Col>
-
-          </Row>
-
-        </>
-
-      )}
-
-
-      {/* ======================================================
-          STOREKEEPER
-      ====================================================== */}
-
-      {!loading &&
-      isStorekeeper && (
-
-        <Row
-          className="g-3"
-        >
-
-          <Col
-            xl={12}
-          >
-
-            <Card
-              className="dashboard-card border-0"
-            >
-
-              <Card.Body>
-
-                <div
-                  className="card-heading"
-                >
-
-                  <div>
-
-                    <h5>
-                      Low Stock
-                    </h5>
-
-
-                    <span>
-                      Products requiring
-                      attention
-                    </span>
-
-                  </div>
-
-
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-light"
-                    onClick={() =>
-                      navigate(
-                        "/products"
-                      )
-                    }
-                  >
-
-                    View Products
-
-                  </button>
-
-                </div>
-
-
-                {lowStockProducts.length ===
-                0 ? (
-
-                  <div
-                    className="text-center text-muted py-5"
-                  >
-
-                    <i className="bi bi-check-circle fs-4 text-success"></i>
-
-
-                    <div
-                      className="mt-2"
-                    >
-
-                      Stock levels are
-                      healthy.
-
-                    </div>
-
-                  </div>
-
-                ) : (
-
-                  <div
-                    className="low-stock-list mt-3"
-                  >
-
-                    {lowStockProducts.map(
-                      (product) => (
-
-                        <div
-                          className="stock-item"
-                          key={
-                            product?.id
-                          }
-                        >
-
-                          <div
-                            className="stock-icon"
-                          >
-
-                            <i className="bi bi-box"></i>
-
-                          </div>
-
-
-                          <div
-                            className="stock-info"
-                          >
-
-                            <strong>
-                              {
-                                product?.name
-                              }
-                            </strong>
-
-
-                            <small>
-
-                              Current:{" "}
-
-                              {
-                                product?.current_stock ??
-                                product?.stock ??
-                                product?.quantity ??
-                                0
-                              }
-
-
-                              {" • "}
-
-
-                              Minimum:{" "}
-
-                              {
-                                product?.minimum_stock ??
-                                product?.reorder_level ??
-                                0
-                              }
-
-                            </small>
-
-                          </div>
-
-
-                          <i className="bi bi-exclamation-circle text-warning"></i>
-
-                        </div>
-
-                      )
-                    )}
-
-                  </div>
-
-                )}
-
-              </Card.Body>
-
-            </Card>
-
-          </Col>
-
-        </Row>
-
-      )}
-
-
-      {/* ======================================================
-          UNKNOWN ROLE
-      ====================================================== */}
-
-      {!loading &&
-      !isCashier &&
-      !isManagement &&
-      !isStorekeeper && (
-
-        <Alert
-          variant="warning"
-        >
-
-          Your account does not have
-          a valid dashboard role
-          configured.
-
-
-          <br />
-
-
-          Current role:
-
-
-          {" "}
-
-
-          <strong>
-
-            {
-              user?.role_name ||
-              user?.role ||
-              "Unknown"
-            }
-
-          </strong>
-
-        </Alert>
-
-      )}
+        )}
 
     </div>
-
   );
-
 };
 
-
 export default Dashboard;
-
