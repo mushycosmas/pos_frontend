@@ -19,7 +19,7 @@ import Sales from "../pages/Sales";
 import Customers from "../pages/Customers";
 import Reports from "../pages/Reports";
 import Users from "../pages/Users";
-import Settings from "../pages/Settings";
+import Settings from "../pages/settings/Settings";
 import Brands from "../pages/Brands";
 
 // ===============================

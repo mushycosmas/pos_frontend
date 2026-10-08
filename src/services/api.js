@@ -1,4 +1,3 @@
-
 import axios from "axios";
 
 // =========================================================
@@ -7,15 +6,11 @@ import axios from "axios";
 
 const api = axios.create({
   baseURL: process.env.REACT_APP_API_URL,
-
-  headers: {
-    "Content-Type": "application/json",
-  },
 });
 
 // =========================================================
 // REQUEST INTERCEPTOR
-// Attach JWT access token to every API request
+// Attach JWT access token
 // =========================================================
 
 api.interceptors.request.use(
@@ -24,10 +19,35 @@ api.interceptors.request.use(
       localStorage.getItem("access_token") ||
       sessionStorage.getItem("access_token");
 
+    // -------------------------------------------------------
+    // JWT
+    // -------------------------------------------------------
+
     if (accessToken) {
       config.headers = config.headers || {};
-
       config.headers.Authorization = `Bearer ${accessToken}`;
+    }
+
+    // -------------------------------------------------------
+    // CONTENT TYPE
+    // -------------------------------------------------------
+    //
+    // Normal request:
+    // application/json
+    //
+    // File upload:
+    // Let browser/Axios set multipart/form-data
+    // including the required boundary.
+    // -------------------------------------------------------
+
+    if (config.data instanceof FormData) {
+      if (config.headers) {
+        delete config.headers["Content-Type"];
+        delete config.headers["content-type"];
+      }
+    } else {
+      config.headers = config.headers || {};
+      config.headers["Content-Type"] = "application/json";
     }
 
     return config;
@@ -53,16 +73,15 @@ api.interceptors.response.use(
   (error) => {
     const status = error.response?.status;
 
-    // =======================================================
-    // SESSION EXPIRED / UNAUTHORIZED
-    // =======================================================
+    // -------------------------------------------------------
+    // SESSION EXPIRED
+    // -------------------------------------------------------
 
     if (status === 401 && !isLoggingOut) {
       isLoggingOut = true;
 
       console.warn("Session expired. Logging out...");
 
-      // Remove authentication data
       localStorage.removeItem("access_token");
       localStorage.removeItem("refresh_token");
       localStorage.removeItem("user");
@@ -71,7 +90,6 @@ api.interceptors.response.use(
       sessionStorage.removeItem("refresh_token");
       sessionStorage.removeItem("user");
 
-      // Redirect to login
       window.location.href = "/login";
     }
 
