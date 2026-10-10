@@ -20,8 +20,8 @@ import ResetPassword from "../pages/auth/ResetPassword";
 // ============================================================
 // MAIN PAGES
 // ============================================================
-import Dashboard from "../pages/Dashboard";
-import POS from "../pages/POS";
+import Dashboard from "../pages/dashboard/Dashboard";
+import POS from "../pages/pos/POS";
 import Sales from "../pages/sales/Sales";
 import Customers from "../pages/customers/Customers";
 import Reports from "../pages/Reports";
