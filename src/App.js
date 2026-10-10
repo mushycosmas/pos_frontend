@@ -7,65 +7,98 @@ import {
 import Sidebar from "./components/layout/Sidebar";
 import TopNavbar from "./components/layout/TopNavbar";
 
-import { InventoryProvider } from "./context/InventoryContext";
 import { AuthProvider } from "./context/AuthContext";
+import { BranchProvider } from "./context/BranchContext";
+import { InventoryProvider } from "./context/InventoryContext";
 
 import AppRoutes from "./routes/AppRoutes";
+
 
 // ============================================================
 // APPLICATION LAYOUT
 // ============================================================
 
 const AppLayout = () => {
+
   const location = useLocation();
 
-  // Login page should NOT have:
-  // - Sidebar
-  // - TopNavbar
-  // - Main content wrapper
+  const pathname =
+    location.pathname.toLowerCase();
 
-  const isLoginPage =
-    location.pathname.toLowerCase() === "/login";
+
+  // ==========================================================
+  // PUBLIC PAGES
+  // ==========================================================
+  //
+  // Public pages have their own layouts.
+  //
+  // Therefore they MUST NOT display:
+  //
+  // - POS Sidebar
+  // - POS TopNavbar
+  // - POS main-content wrapper
+  //
+  // ==========================================================
+
+  const publicPages = [
+    "/",
+    "/login",
+    "/register",
+    "/reset-password",
+  ];
+
+
+  const isPublicPage =
+    publicPages.includes(pathname);
+
 
   // ==========================================================
   // PUBLIC LAYOUT
   // ==========================================================
 
-  if (isLoginPage) {
-    return <AppRoutes />;
+  if (isPublicPage) {
+
+    return (
+      <AppRoutes />
+    );
   }
 
+
   // ==========================================================
-  // AUTHENTICATED APPLICATION LAYOUT
+  // AUTHENTICATED POS LAYOUT
   // ==========================================================
 
   return (
     <div className="app-container">
 
-      {/* ===============================
+      {/* ======================================================
           SIDEBAR
-      =============================== */}
+      ====================================================== */}
 
       <Sidebar />
 
-      {/* ===============================
+
+      {/* ======================================================
           MAIN CONTENT
-      =============================== */}
+      ====================================================== */}
 
       <div className="main-content">
 
-        {/* ===============================
+        {/* ====================================================
             TOP NAVBAR
-        =============================== */}
+        ==================================================== */}
 
         <TopNavbar />
 
-        {/* ===============================
+
+        {/* ====================================================
             PAGE CONTENT
-        =============================== */}
+        ==================================================== */}
 
         <main className="content-area">
+
           <AppRoutes />
+
         </main>
 
       </div>
@@ -74,33 +107,46 @@ const AppLayout = () => {
   );
 };
 
+
 // ============================================================
 // APP
 // ============================================================
 
 const App = () => {
+
   return (
     <BrowserRouter>
 
-      {/* =====================================================
-          AUTHENTICATION
-      ===================================================== */}
+      {/* ======================================================
+          AUTHENTICATION PROVIDER
+      ====================================================== */}
 
       <AuthProvider>
 
-        {/* ===================================================
-            INVENTORY
-        =================================================== */}
+        {/* ====================================================
+            BRANCH PROVIDER
+            ----------------------------------------------------
+            BranchProvider MUST be inside AuthProvider because
+            it uses useAuth().
+        ==================================================== */}
 
-        <InventoryProvider>
+        <BranchProvider>
 
-          {/* =================================================
-              APPLICATION LAYOUT
-          ================================================= */}
+          {/* ==================================================
+              INVENTORY PROVIDER
+          ================================================== */}
 
-          <AppLayout />
+          <InventoryProvider>
 
-        </InventoryProvider>
+            {/* ================================================
+                APPLICATION LAYOUT
+            ================================================ */}
+
+            <AppLayout />
+
+          </InventoryProvider>
+
+        </BranchProvider>
 
       </AuthProvider>
 
@@ -108,5 +154,5 @@ const App = () => {
   );
 };
 
-export default App;
 
+export default App;

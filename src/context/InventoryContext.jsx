@@ -8,10 +8,19 @@ import React, {
 } from "react";
 
 import inventoryApi from "../services/inventoryApi";
+import { useBranch } from "./BranchContext";
 
 const InventoryContext = createContext(null);
 
 export const InventoryProvider = ({ children }) => {
+  // =========================================================
+  // CURRENT BRANCH
+  // =========================================================
+
+  const { currentBranch } = useBranch();
+
+  const currentBranchId = currentBranch?.id ?? null;
+
   // =========================================================
   // STATE
   // =========================================================
@@ -27,8 +36,32 @@ export const InventoryProvider = ({ children }) => {
   // =========================================================
 
   const toNumber = useCallback((value) => {
+    if (value === null || value === undefined || value === "") {
+      return 0;
+    }
+
     const number = Number(value);
     return Number.isFinite(number) ? number : 0;
+  }, []);
+
+  // =========================================================
+  // EXTRACT API RESULTS
+  // =========================================================
+
+  const extractResults = useCallback((response) => {
+    if (Array.isArray(response)) {
+      return response;
+    }
+
+    if (Array.isArray(response?.results)) {
+      return response.results;
+    }
+
+    if (Array.isArray(response?.data)) {
+      return response.data;
+    }
+
+    return [];
   }, []);
 
   // =========================================================
@@ -41,36 +74,95 @@ export const InventoryProvider = ({ children }) => {
         return null;
       }
 
-      const quantity = toNumber(record.quantity);
-      const minQuantity = toNumber(
-        record.min_quantity ?? record.minimum_stock ?? record.minimumStock
-      );
-      const maxQuantity = toNumber(
-        record.max_quantity ?? record.maximum_stock ?? record.maximumStock
-      );
-      const reservedQuantity = toNumber(
-        record.reserved_quantity ?? record.reservedQuantity
-      );
-      const costPrice = toNumber(record.cost_price ?? record.costPrice);
-      const sellingPrice = toNumber(record.selling_price ?? record.sellingPrice);
+      const nestedProduct =
+        record.product && typeof record.product === "object"
+          ? record.product
+          : null;
 
       const productId =
-        record.product ??
+        nestedProduct?.id ??
         record.product_id ??
         record.productId ??
-        record.product?.id ??
-        null;
+        (typeof record.product === "number" ||
+        typeof record.product === "string"
+          ? record.product
+          : null);
 
       const stockId =
-        record.id ?? record.stock_id ?? record.stockId ?? null;
+        record.id ??
+        record.stock_id ??
+        record.stockId ??
+        null;
+
+      const quantity = toNumber(
+        record.quantity ??
+          record.current_stock ??
+          record.currentStock ??
+          record.stock
+      );
+
+      const minQuantity = toNumber(
+        record.min_quantity ??
+          record.minimum_stock ??
+          record.minimumStock ??
+          record.min_stock ??
+          record.minStock
+      );
+
+      const maxQuantity = toNumber(
+        record.max_quantity ??
+          record.maximum_stock ??
+          record.maximumStock
+      );
+
+      const reservedQuantity = toNumber(
+        record.reserved_quantity ??
+          record.reservedQuantity
+      );
+
+      const costPrice = toNumber(
+        record.cost_price ??
+          record.costPrice ??
+          nestedProduct?.cost_price ??
+          nestedProduct?.costPrice
+      );
+
+      const sellingPrice = toNumber(
+        record.selling_price ??
+          record.sellingPrice ??
+          nestedProduct?.selling_price ??
+          nestedProduct?.sellingPrice
+      );
+
+      const category =
+        record.category && typeof record.category === "object"
+          ? record.category
+          : null;
+
+      const branch =
+        record.branch && typeof record.branch === "object"
+          ? record.branch
+          : null;
 
       return {
         // PRODUCT
         id: productId,
         productId,
-        name: record.product_name || record.name || record.product?.name || "Unnamed Product",
-        sku: record.product_sku || record.sku || record.product?.sku || "",
-        barcode: record.product_barcode || record.barcode || record.product?.barcode || "",
+        name:
+          record.product_name ??
+          nestedProduct?.name ??
+          record.name ??
+          "Unnamed Product",
+        sku:
+          record.product_sku ??
+          nestedProduct?.sku ??
+          record.sku ??
+          "",
+        barcode:
+          record.product_barcode ??
+          nestedProduct?.barcode ??
+          record.barcode ??
+          "",
 
         // STOCK
         stockId,
@@ -85,12 +177,31 @@ export const InventoryProvider = ({ children }) => {
         maxQuantity,
 
         // CATEGORY
-        categoryId: record.category_id ?? record.category?.id ?? null,
-        categoryName: record.category_name || record.category?.name || "",
+        categoryId:
+          record.category_id ??
+          category?.id ??
+          nestedProduct?.category_id ??
+          nestedProduct?.category?.id ??
+          null,
+        categoryName:
+          record.category_name ??
+          category?.name ??
+          nestedProduct?.category_name ??
+          nestedProduct?.category?.name ??
+          "",
 
         // BRANCH
-        branchId: record.branch_id ?? record.branch?.id ?? record.branch ?? null,
-        branchName: record.branch_name || record.branch?.name || "",
+        branchId:
+          record.branch_id ??
+          branch?.id ??
+          (typeof record.branch === "number" ||
+          typeof record.branch === "string"
+            ? record.branch
+            : null),
+        branchName:
+          record.branch_name ??
+          branch?.name ??
+          "",
 
         // PRICES
         costPrice,
@@ -98,8 +209,14 @@ export const InventoryProvider = ({ children }) => {
         buyingPrice: costPrice,
 
         // DATES
-        lastUpdated: record.last_updated ?? record.lastUpdated ?? null,
-        createdAt: record.created_at ?? record.createdAt ?? null,
+        lastUpdated:
+          record.last_updated ??
+          record.lastUpdated ??
+          null,
+        createdAt:
+          record.created_at ??
+          record.createdAt ??
+          null,
 
         // RAW API RECORD
         raw: record,
@@ -109,57 +226,63 @@ export const InventoryProvider = ({ children }) => {
   );
 
   // =========================================================
-  // EXTRACT API RESULTS
-  // =========================================================
-
-  const extractResults = useCallback((response) => {
-    if (Array.isArray(response)) {
-      return response;
-    }
-    if (Array.isArray(response?.results)) {
-      return response.results;
-    }
-    if (Array.isArray(response?.data)) {
-      return response.data;
-    }
-    return [];
-  }, []);
-
-  // =========================================================
-  // LOAD INVENTORY
+  // LOAD INVENTORY FOR SELECTED BRANCH
   // =========================================================
 
   const loadInventory = useCallback(
     async (params = {}) => {
+      if (currentBranchId === null || currentBranchId === "") {
+        setProducts([]);
+        setCategories([]);
+        setError(null);
+        setLoading(false);
+
+        return [];
+      }
+
       setLoading(true);
       setError(null);
 
       try {
-        const response = await inventoryApi.getAll(params);
+        const response = await inventoryApi.getAll(
+          params,
+          currentBranchId
+        );
+
         const records = extractResults(response);
+
         const normalizedProducts = records
           .map(normalizeStockRecord)
           .filter(Boolean);
 
-        console.log("NORMALIZED INVENTORY:", normalizedProducts);
+        console.log("Selected branch ID:", currentBranchId);
+        console.log("Inventory API response:", response);
+        console.log("Normalized inventory:", normalizedProducts);
 
         setProducts(normalizedProducts);
 
-        // BUILD CATEGORIES
+        // BUILD CATEGORIES FROM SELECTED BRANCH INVENTORY
         const categoryMap = new Map();
+
         normalizedProducts.forEach((product) => {
-          if (product.categoryId && product.categoryName) {
-            categoryMap.set(product.categoryId, {
+          if (
+            product.categoryId !== null &&
+            product.categoryId !== undefined &&
+            product.categoryName
+          ) {
+            categoryMap.set(String(product.categoryId), {
               id: product.categoryId,
               name: product.categoryName,
             });
           }
         });
+
         setCategories(Array.from(categoryMap.values()));
 
         return normalizedProducts;
       } catch (err) {
         console.error("Failed to load inventory:", err);
+        console.error("Inventory API error:", err?.response?.data);
 
         const message =
           err?.response?.data?.detail ||
@@ -171,20 +294,25 @@ export const InventoryProvider = ({ children }) => {
         setError(message);
         setProducts([]);
         setCategories([]);
+
         throw err;
       } finally {
         setLoading(false);
       }
     },
-    [extractResults, normalizeStockRecord]
+    [
+      currentBranchId,
+      extractResults,
+      normalizeStockRecord,
+    ]
   );
 
   // =========================================================
-  // INITIAL LOAD
+  // RELOAD WHEN SELECTED BRANCH CHANGES
   // =========================================================
 
   useEffect(() => {
-    loadInventory();
+    loadInventory().catch(() => {});
   }, [loadInventory]);
 
   // =========================================================
@@ -193,7 +321,7 @@ export const InventoryProvider = ({ children }) => {
 
   const getStockIdByProductId = useCallback(
     (productId) => {
-      if (!productId) {
+      if (productId === null || productId === undefined) {
         return null;
       }
 
@@ -202,37 +330,49 @@ export const InventoryProvider = ({ children }) => {
       );
 
       if (!product) {
-        console.error("No stock record found for product:", productId);
+        console.error(
+          "No stock record found for product:",
+          productId,
+          "in branch:",
+          currentBranchId
+        );
+
         return null;
       }
 
-      console.log("PRODUCT -> STOCK:", {
-        productId: product.productId,
-        stockId: product.stockId,
-      });
-
       return product.stockId;
     },
-    [products]
+    [products, currentBranchId]
   );
 
   // =========================================================
-  // LOAD STOCK MOVEMENTS - DEFINED BEFORE adjustStock
+  // LOAD STOCK MOVEMENTS FOR SELECTED BRANCH
   // =========================================================
 
   const loadStockMovements = useCallback(
     async (params = {}) => {
+      if (currentBranchId === null || currentBranchId === "") {
+        setStockAdjustments([]);
+        return [];
+      }
+
       try {
-        const response = await inventoryApi.getMovements(params);
+        const response = await inventoryApi.getMovements(
+          params,
+          currentBranchId
+        );
+
         const movements = extractResults(response);
+
         setStockAdjustments(movements);
+
         return movements;
       } catch (err) {
         console.error("Failed to load stock movements:", err);
         throw err;
       }
     },
-    [extractResults]
+    [currentBranchId, extractResults]
   );
 
   // =========================================================
@@ -263,15 +403,22 @@ export const InventoryProvider = ({ children }) => {
   const createStock = useCallback(
     async (data) => {
       try {
-        const response = await inventoryApi.create(data);
+        const payload = {
+          ...data,
+          branch: currentBranchId,
+        };
+
+        const response = await inventoryApi.create(payload);
+
         await loadInventory();
+
         return response;
       } catch (err) {
         console.error("Failed to create stock:", err);
         throw err;
       }
     },
-    [loadInventory]
+    [currentBranchId, loadInventory]
   );
 
   // =========================================================
@@ -286,7 +433,9 @@ export const InventoryProvider = ({ children }) => {
 
       try {
         const response = await inventoryApi.update(stockId, data);
+
         await loadInventory();
+
         return response;
       } catch (err) {
         console.error("Failed to update stock:", err);
@@ -297,7 +446,7 @@ export const InventoryProvider = ({ children }) => {
   );
 
   // =========================================================
-  // PATCH STOCK - Uses the /adjust/ endpoint
+  // PATCH STOCK
   // =========================================================
 
   const patchStock = useCallback(
@@ -322,23 +471,22 @@ export const InventoryProvider = ({ children }) => {
         throw new Error("Adjustment type is required.");
       }
 
-      if (!payload.reason) {
+      if (!payload.reason.trim()) {
         throw new Error("Adjustment reason is required.");
       }
 
-      console.log("PATCH STOCK:", {
-        stockId,
-        url: `/api/v1/inventory/stocks/${stockId}/adjust/`,
-        payload,
-      });
-
       try {
-        const response = await inventoryApi.adjustStock(stockId, payload);
+        const response = await inventoryApi.adjustStock(
+          stockId,
+          payload
+        );
+
         await loadInventory();
         await loadStockMovements();
+
         return response;
       } catch (err) {
-        console.error("Failed to patch stock:", err);
+        console.error("Failed to adjust stock:", err);
         throw err;
       }
     },
@@ -357,7 +505,9 @@ export const InventoryProvider = ({ children }) => {
 
       try {
         const response = await inventoryApi.delete(stockId);
+
         await loadInventory();
+
         return response;
       } catch (err) {
         console.error("Failed to delete stock:", err);
@@ -379,8 +529,10 @@ export const InventoryProvider = ({ children }) => {
 
       try {
         const response = await inventoryApi.deleteMovement(id);
+
         await loadStockMovements();
         await loadInventory();
+
         return response;
       } catch (err) {
         console.error("Failed to delete stock adjustment:", err);
@@ -435,7 +587,7 @@ export const InventoryProvider = ({ children }) => {
   );
 
   // =========================================================
-  // ADJUST STOCK - Main entry point for stock adjustments
+  // ADJUST STOCK
   // =========================================================
 
   const adjustStock = useCallback(
@@ -450,7 +602,6 @@ export const InventoryProvider = ({ children }) => {
     }) => {
       const qty = toNumber(quantity);
 
-      // VALIDATION
       if (qty <= 0) {
         throw new Error("Quantity must be greater than zero.");
       }
@@ -459,49 +610,42 @@ export const InventoryProvider = ({ children }) => {
         throw new Error("Adjustment type is required.");
       }
 
+      const normalizedType = String(type).toUpperCase();
       const validTypes = ["ADD", "REMOVE"];
-      const normalizedType = type.toUpperCase();
+
       if (!validTypes.includes(normalizedType)) {
-        throw new Error(`Invalid type. Must be one of: ${validTypes.join(", ")}`);
+        throw new Error(
+          `Invalid type. Must be one of: ${validTypes.join(", ")}`
+        );
       }
 
       if (!reason?.trim()) {
         throw new Error("Adjustment reason is required.");
       }
 
-      // Determine actual stock ID
-      let actualStockId = stockId;
-
-      if (!actualStockId && productId) {
-        actualStockId = getStockIdByProductId(productId);
-      }
+      const actualStockId =
+        stockId || getStockIdByProductId(productId);
 
       if (!actualStockId) {
         throw new Error(
-          `No stock record found for product ID ${productId}.`
+          `No stock record found for product ID ${productId} in the selected branch.`
         );
       }
 
-      // Build payload
       const payload = {
         quantity: qty,
         type: normalizedType,
         reason: reason.trim(),
         reference: reference?.trim() || "",
-        notes: notes || reason.trim(),
+        notes: notes?.trim() || reason.trim(),
       };
 
-      console.log("ADJUST STOCK:", {
-        productId,
-        stockId: actualStockId,
-        payload,
-      });
-
       try {
-        // Call the adjust endpoint
-        const response = await inventoryApi.adjustStock(actualStockId, payload);
+        const response = await inventoryApi.adjustStock(
+          actualStockId,
+          payload
+        );
 
-        // Refresh data
         await loadInventory();
         await loadStockMovements();
 
@@ -511,43 +655,64 @@ export const InventoryProvider = ({ children }) => {
         throw err;
       }
     },
-    [getStockIdByProductId, loadInventory, loadStockMovements, toNumber]
+    [
+      getStockIdByProductId,
+      loadInventory,
+      loadStockMovements,
+      toNumber,
+    ]
   );
 
   // =========================================================
-  // LOW STOCK
+  // LOW STOCK FOR SELECTED BRANCH
   // =========================================================
 
   const loadLowStock = useCallback(
     async () => {
+      if (currentBranchId === null || currentBranchId === "") {
+        return [];
+      }
+
       try {
-        const response = await inventoryApi.getLowStock();
-        const records = extractResults(response);
-        return records.map(normalizeStockRecord).filter(Boolean);
+        const response = await inventoryApi.getLowStock(
+          currentBranchId
+        );
+
+        return extractResults(response)
+          .map(normalizeStockRecord)
+          .filter(Boolean);
       } catch (err) {
         console.error("Failed to load low stock:", err);
         throw err;
       }
     },
-    [extractResults, normalizeStockRecord]
+    [currentBranchId, extractResults, normalizeStockRecord]
   );
 
   // =========================================================
-  // OUT OF STOCK
+  // OUT OF STOCK FOR SELECTED BRANCH
   // =========================================================
 
   const loadOutOfStock = useCallback(
     async () => {
+      if (currentBranchId === null || currentBranchId === "") {
+        return [];
+      }
+
       try {
-        const response = await inventoryApi.getOutOfStock();
-        const records = extractResults(response);
-        return records.map(normalizeStockRecord).filter(Boolean);
+        const response = await inventoryApi.getOutOfStock(
+          currentBranchId
+        );
+
+        return extractResults(response)
+          .map(normalizeStockRecord)
+          .filter(Boolean);
       } catch (err) {
         console.error("Failed to load out of stock:", err);
         throw err;
       }
     },
-    [extractResults, normalizeStockRecord]
+    [currentBranchId, extractResults, normalizeStockRecord]
   );
 
   // =========================================================
@@ -584,11 +749,10 @@ export const InventoryProvider = ({ children }) => {
   // =========================================================
 
   const getProduct = useCallback(
-    (productId) => {
-      return products.find(
+    (productId) =>
+      products.find(
         (product) => Number(product.productId) === Number(productId)
-      );
-    },
+      ),
     [products]
   );
 
@@ -597,9 +761,7 @@ export const InventoryProvider = ({ children }) => {
   // =========================================================
 
   const refreshInventory = useCallback(
-    async (params = {}) => {
-      return loadInventory(params);
-    },
+    async (params = {}) => loadInventory(params),
     [loadInventory]
   );
 
@@ -607,44 +769,62 @@ export const InventoryProvider = ({ children }) => {
   // COMPUTED VALUES
   // =========================================================
 
-  const lowStockProducts = useMemo(() => {
-    return products.filter((product) => {
-      const stock = toNumber(product.stock);
-      const minimumStock = toNumber(product.minimumStock ?? product.minStock);
-      return stock > 0 && stock <= minimumStock;
-    });
-  }, [products, toNumber]);
+  const lowStockProducts = useMemo(
+    () =>
+      products.filter((product) => {
+        const stock = toNumber(product.stock);
+        const minimumStock = toNumber(
+          product.minimumStock ?? product.minStock
+        );
 
-  const outOfStockProducts = useMemo(() => {
-    return products.filter((product) => toNumber(product.stock) <= 0);
-  }, [products, toNumber]);
+        return stock > 0 && stock <= minimumStock;
+      }),
+    [products, toNumber]
+  );
+
+  const outOfStockProducts = useMemo(
+    () =>
+      products.filter(
+        (product) => toNumber(product.stock) <= 0
+      ),
+    [products, toNumber]
+  );
 
   const totalProducts = products.length;
 
-  const totalStock = useMemo(() => {
-    return products.reduce(
-      (total, product) => total + toNumber(product.stock),
-      0
-    );
-  }, [products, toNumber]);
+  const totalStock = useMemo(
+    () =>
+      products.reduce(
+        (total, product) => total + toNumber(product.stock),
+        0
+      ),
+    [products, toNumber]
+  );
 
-  const inventoryValue = useMemo(() => {
-    return products.reduce((total, product) => {
-      const stock = toNumber(product.stock);
-      const costPrice = toNumber(product.costPrice);
-      return total + stock * costPrice;
-    }, 0);
-  }, [products, toNumber]);
+  const inventoryValue = useMemo(
+    () =>
+      products.reduce(
+        (total, product) =>
+          total +
+          toNumber(product.stock) * toNumber(product.costPrice),
+        0
+      ),
+    [products, toNumber]
+  );
 
-  const potentialSalesValue = useMemo(() => {
-    return products.reduce((total, product) => {
-      const stock = toNumber(product.stock);
-      const sellingPrice = toNumber(product.sellingPrice);
-      return total + stock * sellingPrice;
-    }, 0);
-  }, [products, toNumber]);
+  const potentialSalesValue = useMemo(
+    () =>
+      products.reduce(
+        (total, product) =>
+          total +
+          toNumber(product.stock) * toNumber(product.sellingPrice),
+        0
+      ),
+    [products, toNumber]
+  );
 
-  const lowAndOutOfStock = lowStockProducts.length + outOfStockProducts.length;
+  const lowAndOutOfStock =
+    lowStockProducts.length + outOfStockProducts.length;
 
   // =========================================================
   // CONTEXT VALUE
@@ -652,6 +832,10 @@ export const InventoryProvider = ({ children }) => {
 
   const value = useMemo(
     () => ({
+      // BRANCH
+      currentBranch,
+      currentBranchId,
+
       // DATA
       products,
       categories,
@@ -671,8 +855,6 @@ export const InventoryProvider = ({ children }) => {
       updateStock,
       patchStock,
       deleteStock,
-
-      // STOCK ID
       getStockIdByProductId,
 
       // ADJUSTMENTS
@@ -697,12 +879,13 @@ export const InventoryProvider = ({ children }) => {
       totalStock,
       inventoryValue,
       potentialSalesValue,
-
       lowStockProducts,
       outOfStockProducts,
       lowAndOutOfStock,
     }),
     [
+      currentBranch,
+      currentBranchId,
       products,
       categories,
       stockAdjustments,

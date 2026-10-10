@@ -1,4 +1,3 @@
-
 import api from "./api";
 
 // ============================================================
@@ -14,7 +13,6 @@ const USER_KEY = "user";
 // ============================================================
 
 const getActiveStorage = () => {
-
   if (
     localStorage.getItem(ACCESS_TOKEN_KEY) ||
     localStorage.getItem(REFRESH_TOKEN_KEY)
@@ -37,13 +35,11 @@ const getActiveStorage = () => {
 // ============================================================
 
 const authApi = {
-
   // ==========================================================
   // LOGIN
   // ==========================================================
 
   login: async (credentials, rememberMe = false) => {
-
     const response = await api.post(
       "/auth/login/",
       credentials
@@ -91,7 +87,6 @@ const authApi = {
     // --------------------------------------------------------
 
     if (refreshToken) {
-
       storage.setItem(
         REFRESH_TOKEN_KEY,
         refreshToken
@@ -103,7 +98,6 @@ const authApi = {
     // --------------------------------------------------------
 
     if (data.user) {
-
       storage.setItem(
         USER_KEY,
         JSON.stringify(data.user)
@@ -113,15 +107,119 @@ const authApi = {
     return data;
   },
 
+  // ==========================================================
+  // COMPANY REGISTRATION
+  // ==========================================================
+  /*
+   * Creates:
+   *
+   * 1. Company
+   * 2. Main Branch
+   * 3. Owner / Administrator User
+   *
+   * Backend endpoint:
+   *
+   * POST /api/v1/auth/register-company/
+   *
+   * Expected input:
+   *
+   * {
+   *   company: {...},
+   *   owner: {...}
+   * }
+   *
+   * Because company.logo is a File, the request is sent
+   * using multipart/form-data.
+   */
+
+  registerCompany: async (registrationData) => {
+    if (!registrationData) {
+      throw new Error(
+        "Registration data is required."
+      );
+    }
+
+    const company =
+      registrationData.company || {};
+
+    const owner =
+      registrationData.owner || {};
+
+    const formData = new FormData();
+
+    // --------------------------------------------------------
+    // COMPANY DATA
+    // --------------------------------------------------------
+
+    Object.entries(company).forEach(
+      ([key, value]) => {
+        // Logo must be uploaded as a file.
+        if (key === "logo") {
+          if (value instanceof File) {
+            formData.append("company.logo", value);
+          }
+
+          return;
+        }
+
+        // Do not send empty/null values unnecessarily.
+        if (
+          value !== null &&
+          value !== undefined &&
+          value !== ""
+        ) {
+          formData.append(
+            `company.${key}`,
+            value
+          );
+        }
+      }
+    );
+
+    // --------------------------------------------------------
+    // OWNER DATA
+    // --------------------------------------------------------
+
+    Object.entries(owner).forEach(
+      ([key, value]) => {
+        if (
+          value !== null &&
+          value !== undefined &&
+          value !== ""
+        ) {
+          formData.append(
+            `owner.${key}`,
+            value
+          );
+        }
+      }
+    );
+
+    // --------------------------------------------------------
+    // SUBMIT REGISTRATION
+    // --------------------------------------------------------
+
+    const response = await api.post(
+      "/auth/register-company/",
+      formData,
+      {
+        headers: {
+          // Let the browser/Axios automatically generate the
+          // correct multipart boundary.
+          "Content-Type": "multipart/form-data",
+        },
+      }
+    );
+
+    return response.data;
+  },
 
   // ==========================================================
   // LOGOUT
   // ==========================================================
 
   logout: async () => {
-
     try {
-
       const refreshToken =
         authApi.getRefreshToken();
 
@@ -131,7 +229,6 @@ const authApi = {
        */
 
       if (refreshToken) {
-
         await api.post(
           "/auth/logout/",
           {
@@ -139,9 +236,7 @@ const authApi = {
           }
         );
       }
-
     } catch (error) {
-
       /*
        * Local logout must still happen even if
        * the backend logout endpoint fails.
@@ -151,22 +246,18 @@ const authApi = {
         "Logout API request failed:",
         error
       );
-
     } finally {
-
       authApi.clearStorage();
     }
 
     return true;
   },
 
-
   // ==========================================================
   // GET CURRENT USER
   // ==========================================================
 
   getCurrentUser: async () => {
-
     const response = await api.get(
       "/auth/me/"
     );
@@ -178,18 +269,15 @@ const authApi = {
     return user;
   },
 
-
   // ==========================================================
   // REFRESH ACCESS TOKEN
   // ==========================================================
 
   refreshToken: async () => {
-
     const refreshToken =
       authApi.getRefreshToken();
 
     if (!refreshToken) {
-
       throw new Error(
         "No refresh token available."
       );
@@ -208,7 +296,6 @@ const authApi = {
       data.access || data.access_token;
 
     if (!accessToken) {
-
       throw new Error(
         "No access token returned."
       );
@@ -230,7 +317,6 @@ const authApi = {
       data.refresh || data.refresh_token;
 
     if (newRefreshToken) {
-
       authApi.setRefreshToken(
         newRefreshToken
       );
@@ -239,13 +325,11 @@ const authApi = {
     return data;
   },
 
-
   // ==========================================================
   // GET ACCESS TOKEN
   // ==========================================================
 
   getAccessToken: () => {
-
     return (
       localStorage.getItem(
         ACCESS_TOKEN_KEY
@@ -255,14 +339,12 @@ const authApi = {
       )
     );
   },
-
 
   // ==========================================================
   // GET REFRESH TOKEN
   // ==========================================================
 
   getRefreshToken: () => {
-
     return (
       localStorage.getItem(
         REFRESH_TOKEN_KEY
@@ -273,13 +355,11 @@ const authApi = {
     );
   },
 
-
   // ==========================================================
   // SET ACCESS TOKEN
   // ==========================================================
 
   setAccessToken: (token) => {
-
     if (!token) {
       return;
     }
@@ -288,7 +368,6 @@ const authApi = {
       getActiveStorage();
 
     if (storage) {
-
       storage.setItem(
         ACCESS_TOKEN_KEY,
         token
@@ -304,13 +383,11 @@ const authApi = {
     );
   },
 
-
   // ==========================================================
   // SET REFRESH TOKEN
   // ==========================================================
 
   setRefreshToken: (token) => {
-
     if (!token) {
       return;
     }
@@ -319,7 +396,6 @@ const authApi = {
       getActiveStorage();
 
     if (storage) {
-
       storage.setItem(
         REFRESH_TOKEN_KEY,
         token
@@ -335,13 +411,11 @@ const authApi = {
     );
   },
 
-
   // ==========================================================
   // GET STORED USER
   // ==========================================================
 
   getUser: () => {
-
     const user =
       localStorage.getItem(USER_KEY) ||
       sessionStorage.getItem(USER_KEY);
@@ -351,11 +425,8 @@ const authApi = {
     }
 
     try {
-
       return JSON.parse(user);
-
     } catch (error) {
-
       console.error(
         "Failed to parse stored user:",
         error
@@ -365,13 +436,11 @@ const authApi = {
     }
   },
 
-
   // ==========================================================
   // SET USER
   // ==========================================================
 
   setUser: (user) => {
-
     if (!user) {
       return;
     }
@@ -380,7 +449,6 @@ const authApi = {
       getActiveStorage();
 
     if (storage) {
-
       storage.setItem(
         USER_KEY,
         JSON.stringify(user)
@@ -395,25 +463,21 @@ const authApi = {
     );
   },
 
-
   // ==========================================================
   // IS AUTHENTICATED
   // ==========================================================
 
   isAuthenticated: () => {
-
     return Boolean(
       authApi.getAccessToken()
     );
   },
-
 
   // ==========================================================
   // CLEAR AUTH STORAGE
   // ==========================================================
 
   clearStorage: () => {
-
     // --------------------------------------------------------
     // Local Storage
     // --------------------------------------------------------
@@ -447,39 +511,33 @@ const authApi = {
     );
   },
 
-
   // ==========================================================
   // GET USER ROLE
   // ==========================================================
 
   getRole: () => {
-
     const user =
       authApi.getUser();
 
     return user?.role || null;
   },
 
-
   // ==========================================================
   // GET USER BRANCH
   // ==========================================================
 
   getBranch: () => {
-
     const user =
       authApi.getUser();
 
     return user?.branch || null;
   },
 
-
   // ==========================================================
   // CHECK ROLE
   // ==========================================================
 
   hasRole: (role) => {
-
     const user =
       authApi.getUser();
 
@@ -490,13 +548,11 @@ const authApi = {
     return user.role === role;
   },
 
-
   // ==========================================================
   // CHECK ANY ROLE
   // ==========================================================
 
   hasAnyRole: (roles = []) => {
-
     const user =
       authApi.getUser();
 
@@ -509,13 +565,11 @@ const authApi = {
     );
   },
 
-
   // ==========================================================
   // GET USER PERMISSIONS
   // ==========================================================
 
   getPermissions: () => {
-
     const user =
       authApi.getUser();
 
@@ -526,13 +580,11 @@ const authApi = {
     return user.permissions || [];
   },
 
-
   // ==========================================================
   // CHECK SINGLE PERMISSION
   // ==========================================================
 
   hasPermission: (permission) => {
-
     const user =
       authApi.getUser();
 
@@ -554,21 +606,26 @@ const authApi = {
 
     return (
       Array.isArray(user.permissions) &&
-      user.permissions.includes(permission)
+      user.permissions.includes(
+        permission
+      )
     );
   },
-
 
   // ==========================================================
   // CHECK ANY PERMISSION
   // ==========================================================
 
-  hasAnyPermission: (permissions = []) => {
-
+  hasAnyPermission: (
+    permissions = []
+  ) => {
     const user =
       authApi.getUser();
 
-    if (!user || !Array.isArray(permissions)) {
+    if (
+      !user ||
+      !Array.isArray(permissions)
+    ) {
       return false;
     }
 
@@ -581,30 +638,39 @@ const authApi = {
     }
 
     // --------------------------------------------------------
-    // Check if at least one permission exists
+    // Check permissions
     // --------------------------------------------------------
 
-    if (!Array.isArray(user.permissions)) {
+    if (
+      !Array.isArray(
+        user.permissions
+      )
+    ) {
       return false;
     }
 
     return permissions.some(
       (permission) =>
-        user.permissions.includes(permission)
+        user.permissions.includes(
+          permission
+        )
     );
   },
-
 
   // ==========================================================
   // CHECK ALL PERMISSIONS
   // ==========================================================
 
-  hasAllPermissions: (permissions = []) => {
-
+  hasAllPermissions: (
+    permissions = []
+  ) => {
     const user =
       authApi.getUser();
 
-    if (!user || !Array.isArray(permissions)) {
+    if (
+      !user ||
+      !Array.isArray(permissions)
+    ) {
       return false;
     }
 
@@ -617,20 +683,24 @@ const authApi = {
     }
 
     // --------------------------------------------------------
-    // Check if all permissions exist
+    // Check permissions
     // --------------------------------------------------------
 
-    if (!Array.isArray(user.permissions)) {
+    if (
+      !Array.isArray(
+        user.permissions
+      )
+    ) {
       return false;
     }
 
     return permissions.every(
       (permission) =>
-        user.permissions.includes(permission)
+        user.permissions.includes(
+          permission
+        )
     );
   },
-
 };
 
 export default authApi;
-

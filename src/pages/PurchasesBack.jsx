@@ -1,3 +1,4 @@
+
 import React, {
   useCallback,
   useEffect,
@@ -27,7 +28,7 @@ import branchesApi from "../services/branchesApi";
 // PURCHASES PAGE
 // ==========================================================
 
-const PurchasesBack = () => {
+const Purchases = () => {
   // ========================================================
   // STATE
   // ========================================================
@@ -38,10 +39,13 @@ const PurchasesBack = () => {
   const [branches, setBranches] = useState([]);
 
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [receiving, setReceiving] = useState(false);
+
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   const [showModal, setShowModal] = useState(false);
-  const [saving, setSaving] = useState(false);
 
   // ========================================================
   // NORMALIZE API RESPONSE
@@ -66,8 +70,7 @@ const PurchasesBack = () => {
   const loadPurchases = useCallback(async () => {
     const data = await purchasesApi.getAll();
 
-    const purchaseList =
-      normalizeResponse(data);
+    const purchaseList = normalizeResponse(data);
 
     setPurchases(purchaseList);
 
@@ -81,8 +84,7 @@ const PurchasesBack = () => {
   const loadProducts = useCallback(async () => {
     const data = await productsApi.getAll();
 
-    const productList =
-      normalizeResponse(data);
+    const productList = normalizeResponse(data);
 
     setProducts(productList);
 
@@ -96,8 +98,7 @@ const PurchasesBack = () => {
   const loadSuppliers = useCallback(async () => {
     const data = await suppliersApi.getAll();
 
-    const supplierList =
-      normalizeResponse(data);
+    const supplierList = normalizeResponse(data);
 
     setSuppliers(supplierList);
 
@@ -111,8 +112,7 @@ const PurchasesBack = () => {
   const loadBranches = useCallback(async () => {
     const data = await branchesApi.getAll();
 
-    const branchList =
-      normalizeResponse(data);
+    const branchList = normalizeResponse(data);
 
     setBranches(branchList);
 
@@ -146,7 +146,10 @@ const PurchasesBack = () => {
       );
 
       setError(
-        "Failed to load purchase data. Please try again."
+        getBackendError(
+          err,
+          "Failed to load purchase data."
+        )
       );
     } finally {
       setLoading(false);
@@ -176,6 +179,73 @@ const PurchasesBack = () => {
     return Number.isFinite(number)
       ? number
       : 0;
+  };
+
+  // ========================================================
+  // BACKEND ERROR
+  // ========================================================
+
+  const getBackendError = (
+    err,
+    fallback = "Something went wrong."
+  ) => {
+    const backendError =
+      err?.response?.data;
+
+    if (!backendError) {
+      return err?.message || fallback;
+    }
+
+    if (
+      typeof backendError ===
+      "string"
+    ) {
+      return backendError;
+    }
+
+    if (
+      backendError.detail
+    ) {
+      return String(
+        backendError.detail
+      );
+    }
+
+    if (
+      backendError.message
+    ) {
+      return String(
+        backendError.message
+      );
+    }
+
+    if (
+      typeof backendError ===
+      "object"
+    ) {
+      return Object.entries(
+        backendError
+      )
+        .map(
+          ([field, messages]) => {
+            const text =
+              Array.isArray(
+                messages
+              )
+                ? messages.join(
+                    ", "
+                  )
+                : String(
+                    messages
+                  );
+
+            return `${field}: ${text}`;
+          }
+        )
+        .join("\n");
+    }
+
+    return fallback;
   };
 
   // ========================================================
@@ -221,22 +291,20 @@ const PurchasesBack = () => {
   // ========================================================
 
   const getSupplier = (purchase) => {
-    // Backend may return supplier_name
     if (purchase?.supplier_name) {
       return {
         name: purchase.supplier_name,
       };
     }
 
-    // Backend may return supplier object
     if (
       purchase?.supplier &&
-      typeof purchase.supplier === "object"
+      typeof purchase.supplier ===
+        "object"
     ) {
       return purchase.supplier;
     }
 
-    // Backend may return supplier ID
     const supplierId =
       purchase?.supplier ??
       purchase?.supplier_id ??
@@ -262,7 +330,8 @@ const PurchasesBack = () => {
 
     if (
       purchase?.branch &&
-      typeof purchase.branch === "object"
+      typeof purchase.branch ===
+        "object"
     ) {
       return purchase.branch;
     }
@@ -280,11 +349,15 @@ const PurchasesBack = () => {
   };
 
   // ========================================================
-  // GET PURCHASE ITEMS
+  // GET ITEMS
   // ========================================================
 
   const getItems = (purchase) => {
-    if (Array.isArray(purchase?.items)) {
+    if (
+      Array.isArray(
+        purchase?.items
+      )
+    ) {
       return purchase.items;
     }
 
@@ -300,10 +373,12 @@ const PurchasesBack = () => {
   };
 
   // ========================================================
-  // GET PURCHASE TOTAL
+  // GET TOTAL
   // ========================================================
 
-  const getPurchaseTotal = (purchase) => {
+  const getPurchaseTotal = (
+    purchase
+  ) => {
     return toNumber(
       purchase?.total ??
         purchase?.total_amount ??
@@ -315,7 +390,9 @@ const PurchasesBack = () => {
   // GET PURCHASE NUMBER
   // ========================================================
 
-  const getPurchaseNumber = (purchase) => {
+  const getPurchaseNumber = (
+    purchase
+  ) => {
     return (
       purchase?.purchase_number ||
       purchase?.purchaseNumber ||
@@ -338,7 +415,9 @@ const PurchasesBack = () => {
   // STATUS LABEL
   // ========================================================
 
-  const getStatusLabel = (status) => {
+  const getStatusLabel = (
+    status
+  ) => {
     const labels = {
       draft: "Draft",
       ordered: "Ordered",
@@ -358,7 +437,9 @@ const PurchasesBack = () => {
   // STATUS BADGE
   // ========================================================
 
-  const getStatusVariant = (status) => {
+  const getStatusVariant = (
+    status
+  ) => {
     switch (status) {
       case "draft":
         return "secondary";
@@ -378,6 +459,38 @@ const PurchasesBack = () => {
       default:
         return "secondary";
     }
+  };
+
+  // ========================================================
+  // IS FULLY RECEIVED
+  // ========================================================
+
+  const isFullyReceived = (
+    purchase
+  ) => {
+    if (
+      purchase?.is_fully_received !==
+      undefined
+    ) {
+      return Boolean(
+        purchase.is_fully_received
+      );
+    }
+
+    const ordered =
+      toNumber(
+        purchase?.total_ordered_quantity
+      );
+
+    const received =
+      toNumber(
+        purchase?.total_received_quantity
+      );
+
+    return (
+      ordered > 0 &&
+      received >= ordered
+    );
   };
 
   // ========================================================
@@ -402,7 +515,9 @@ const PurchasesBack = () => {
       purchases.reduce(
         (sum, purchase) =>
           sum +
-          getItems(purchase).reduce(
+          getItems(
+            purchase
+          ).reduce(
             (
               itemSum,
               item
@@ -423,16 +538,26 @@ const PurchasesBack = () => {
           "received"
       ).length;
 
+    const pendingPurchases =
+      purchases.filter(
+        (purchase) =>
+          purchase.status ===
+            "draft" ||
+          purchase.status ===
+            "ordered"
+      ).length;
+
     return {
       totalPurchases,
       totalPurchaseValue,
       totalItemsPurchased,
       receivedPurchases,
+      pendingPurchases,
     };
   }, [purchases]);
 
   // ========================================================
-  // HANDLE SAVE PURCHASE
+  // HANDLE SAVE
   // ========================================================
 
   const handleSave = async (
@@ -441,27 +566,37 @@ const PurchasesBack = () => {
     try {
       setSaving(true);
       setError("");
+      setSuccess("");
 
       // ====================================================
-      // IMPORTANT
+      // BACKEND EXPECTS
       //
-      // The backend now calculates:
+      // supplier
+      // branch
+      // company (if available)
+      // order_date
+      // expected_delivery_date
+      // discount
+      // shipping_cost
+      // status
+      // payment_status
+      // notes
+      // items
       //
+      // Backend calculates:
       // subtotal
       // tax
       // total
       //
-      // Therefore we DO NOT send those values
-      // from the frontend.
+      // DO NOT send:
+      // purchase_number
+      // created_by
+      // received_quantity
+      // subtotal
+      // total
       // ====================================================
 
       const payload = {
-        purchase_number:
-          String(
-            purchaseData.purchase_number ||
-              ""
-          ).trim(),
-
         supplier:
           Number(
             purchaseData.supplier
@@ -476,21 +611,33 @@ const PurchasesBack = () => {
           purchaseData.order_date ||
           null,
 
+        expected_delivery_date:
+          purchaseData.expected_delivery_date ||
+          null,
+
+        discount:
+          Number(
+            purchaseData.discount ??
+              0
+          ),
+
+        shipping_cost:
+          Number(
+            purchaseData.shipping_cost ??
+              0
+          ),
+
         status:
           purchaseData.status ||
-          "received",
+          "draft",
 
         payment_status:
           purchaseData.payment_status ||
-          "pending",
+          "unpaid",
 
         notes:
           purchaseData.notes ||
           "",
-
-        // ==================================================
-        // ITEMS
-        // ==================================================
 
         items:
           Array.isArray(
@@ -510,7 +657,8 @@ const PurchasesBack = () => {
 
                   unit_cost:
                     Number(
-                      item.unit_cost
+                      item.unit_cost ??
+                        0
                     ),
 
                   discount:
@@ -524,19 +672,26 @@ const PurchasesBack = () => {
                       item.tax ??
                         0
                     ),
-
-                  total:
-                    Number(
-                      item.total ??
-                        0
-                    ),
                 })
               )
             : [],
       };
 
       // ====================================================
-      // VALIDATE PAYLOAD
+      // OPTIONAL COMPANY
+      // ====================================================
+
+      if (
+        purchaseData.company
+      ) {
+        payload.company =
+          Number(
+            purchaseData.company
+          );
+      }
+
+      // ====================================================
+      // VALIDATION
       // ====================================================
 
       if (!payload.supplier) {
@@ -562,32 +717,71 @@ const PurchasesBack = () => {
         );
       }
 
+      payload.items.forEach(
+        (item, index) => {
+          if (!item.product) {
+            throw new Error(
+              `Product is required for item ${
+                index + 1
+              }.`
+            );
+          }
+
+          if (
+            item.quantity <= 0
+          ) {
+            throw new Error(
+              `Quantity must be greater than 0 for item ${
+                index + 1
+              }.`
+            );
+          }
+
+          if (
+            item.unit_cost < 0
+          ) {
+            throw new Error(
+              `Unit cost cannot be negative for item ${
+                index + 1
+              }.`
+            );
+          }
+
+          if (
+            item.discount < 0 ||
+            item.discount > 100
+          ) {
+            throw new Error(
+              `Discount must be between 0 and 100 for item ${
+                index + 1
+              }.`
+            );
+          }
+
+          if (
+            item.tax < 0 ||
+            item.tax > 100
+          ) {
+            throw new Error(
+              `Tax must be between 0 and 100 for item ${
+                index + 1
+              }.`
+            );
+          }
+        }
+      );
+
       // ====================================================
       // DEBUG
       // ====================================================
 
       console.log(
-        "=========================================="
-      );
-
-      console.log(
-        "CREATE PURCHASE PAYLOAD:"
-      );
-
-      console.log(
-        JSON.stringify(
-          payload,
-          null,
-          2
-        )
-      );
-
-      console.log(
-        "=========================================="
+        "CREATE PURCHASE PAYLOAD:",
+        payload
       );
 
       // ====================================================
-      // CREATE PURCHASE
+      // CREATE
       // ====================================================
 
       await purchasesApi.create(
@@ -595,10 +789,14 @@ const PurchasesBack = () => {
       );
 
       // ====================================================
-      // CLOSE MODAL
+      // SUCCESS
       // ====================================================
 
       setShowModal(false);
+
+      setSuccess(
+        "Purchase created successfully."
+      );
 
       // ====================================================
       // RELOAD
@@ -619,10 +817,6 @@ const PurchasesBack = () => {
         err?.response?.data
       );
 
-      // ====================================================
-      // HANDLE FRONTEND ERROR
-      // ====================================================
-
       if (
         err instanceof Error &&
         !err?.response
@@ -635,52 +829,12 @@ const PurchasesBack = () => {
         return;
       }
 
-      // ====================================================
-      // HANDLE BACKEND ERROR
-      // ====================================================
-
-      const backendError =
-        err?.response?.data;
-
-      let message =
-        "Failed to save purchase.";
-
-      if (
-        backendError &&
-        typeof backendError ===
-          "object"
-      ) {
-        message =
-          Object.entries(
-            backendError
-          )
-            .map(
-              ([field, messages]) => {
-                const formattedMessages =
-                  Array.isArray(
-                    messages
-                  )
-                    ? messages.join(
-                        ", "
-                      )
-                    : String(
-                        messages
-                      );
-
-                return `${field}: ${formattedMessages}`;
-              }
-            )
-            .join("\n");
-      } else if (
-        backendError
-      ) {
-        message =
-          String(
-            backendError
-          );
-      }
-
-      setError(message);
+      setError(
+        getBackendError(
+          err,
+          "Failed to save purchase."
+        )
+      );
     } finally {
       setSaving(false);
     }
@@ -708,9 +862,14 @@ const PurchasesBack = () => {
 
     try {
       setError("");
+      setSuccess("");
 
       await purchasesApi.delete(
         id
+      );
+
+      setSuccess(
+        "Purchase deleted successfully."
       );
 
       await Promise.all([
@@ -723,42 +882,94 @@ const PurchasesBack = () => {
         err
       );
 
+      setError(
+        getBackendError(
+          err,
+          "Failed to delete purchase."
+        )
+      );
+    }
+  };
+
+  // ========================================================
+  // RECEIVE PURCHASE
+  // ========================================================
+
+  const handleReceive = async (
+    purchase
+  ) => {
+    if (!purchase?.id) {
+      return;
+    }
+
+    if (
+      isFullyReceived(
+        purchase
+      )
+    ) {
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        `Receive purchase ${getPurchaseNumber(
+          purchase
+        )}?`
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setReceiving(true);
+      setError("");
+      setSuccess("");
+
+      // ====================================================
+      // RECEIVE ENDPOINT
+      // ====================================================
+
+      if (
+        typeof purchasesApi.receive !==
+        "function"
+      ) {
+        throw new Error(
+          "purchasesApi.receive() is not implemented. Add the receive endpoint to purchasesApi."
+        );
+      }
+
+      await purchasesApi.receive(
+        purchase.id
+      );
+
+      setSuccess(
+        "Purchase received successfully."
+      );
+
+      await Promise.all([
+        loadPurchases(),
+        loadProducts(),
+      ]);
+    } catch (err) {
+      console.error(
+        "Failed to receive purchase:",
+        err
+      );
+
       console.error(
         "Backend response:",
         err?.response?.data
       );
 
-      const backendError =
-        err?.response?.data;
-
-      let message =
-        "Failed to delete purchase.";
-
-      if (
-        backendError &&
-        typeof backendError ===
-          "object"
-      ) {
-        message =
-          Object.entries(
-            backendError
-          )
-            .map(
-              ([field, messages]) =>
-                `${field}: ${
-                  Array.isArray(
-                    messages
-                  )
-                    ? messages.join(
-                        ", "
-                      )
-                    : messages
-                }`
-            )
-            .join("\n");
-      }
-
-      setError(message);
+      setError(
+        getBackendError(
+          err,
+          "Failed to receive purchase."
+        )
+      );
+    } finally {
+      setReceiving(false);
     }
   };
 
@@ -821,7 +1032,8 @@ const PurchasesBack = () => {
           }
           disabled={
             loading ||
-            saving
+            saving ||
+            receiving
           }
         >
           <i className="bi bi-plus-lg me-2" />
@@ -830,6 +1042,7 @@ const PurchasesBack = () => {
         </Button>
 
       </div>
+
 
       {/* ==================================================
           ERROR
@@ -859,6 +1072,24 @@ const PurchasesBack = () => {
           </div>
         </Alert>
       )}
+
+
+      {/* ==================================================
+          SUCCESS
+      ================================================== */}
+
+      {success && (
+        <Alert
+          variant="success"
+          dismissible
+          onClose={() =>
+            setSuccess("")
+          }
+        >
+          {success}
+        </Alert>
+      )}
+
 
       {/* ==================================================
           STATISTICS
@@ -891,6 +1122,7 @@ const PurchasesBack = () => {
           </Card>
         </Col>
 
+
         {/* PURCHASE VALUE */}
 
         <Col
@@ -916,6 +1148,7 @@ const PurchasesBack = () => {
           </Card>
         </Col>
 
+
         {/* ITEMS */}
 
         <Col
@@ -940,6 +1173,7 @@ const PurchasesBack = () => {
 
           </Card>
         </Col>
+
 
         {/* RECEIVED */}
 
@@ -968,6 +1202,7 @@ const PurchasesBack = () => {
 
       </Row>
 
+
       {/* ==================================================
           PURCHASE TABLE
       ================================================== */}
@@ -992,6 +1227,7 @@ const PurchasesBack = () => {
             </div>
 
           </div>
+
 
           {/* ==================================================
               LOADING
@@ -1054,12 +1290,17 @@ const PurchasesBack = () => {
                     </th>
 
                     <th>
+                      RECEIVING
+                    </th>
+
+                    <th>
                       ACTION
                     </th>
 
                   </tr>
 
                 </thead>
+
 
                 <tbody>
 
@@ -1069,7 +1310,7 @@ const PurchasesBack = () => {
                     <tr>
 
                       <td
-                        colSpan="8"
+                        colSpan="9"
                         className="text-center py-5 text-muted"
                       >
 
@@ -1111,6 +1352,11 @@ const PurchasesBack = () => {
                             purchase
                           );
 
+                        const fullyReceived =
+                          isFullyReceived(
+                            purchase
+                          );
+
                         return (
                           <tr
                             key={
@@ -1127,6 +1373,7 @@ const PurchasesBack = () => {
                               )}
                             </td>
 
+
                             {/* PURCHASE NUMBER */}
 
                             <td>
@@ -1139,6 +1386,7 @@ const PurchasesBack = () => {
 
                             </td>
 
+
                             {/* SUPPLIER */}
 
                             <td>
@@ -1146,12 +1394,14 @@ const PurchasesBack = () => {
                                 "-"}
                             </td>
 
+
                             {/* BRANCH */}
 
                             <td>
                               {branch?.name ||
                                 "-"}
                             </td>
+
 
                             {/* ITEMS */}
 
@@ -1166,6 +1416,7 @@ const PurchasesBack = () => {
 
                             </td>
 
+
                             {/* TOTAL */}
 
                             <td>
@@ -1177,6 +1428,7 @@ const PurchasesBack = () => {
                               </strong>
 
                             </td>
+
 
                             {/* STATUS */}
 
@@ -1194,27 +1446,111 @@ const PurchasesBack = () => {
 
                             </td>
 
+
+                            {/* RECEIVING */}
+
+                            <td>
+
+                              <div className="small">
+
+                                <div>
+                                  Ordered:{" "}
+                                  <strong>
+                                    {
+                                      purchase.total_ordered_quantity ??
+                                      0
+                                    }
+                                  </strong>
+                                </div>
+
+                                <div>
+                                  Received:{" "}
+                                  <strong>
+                                    {
+                                      purchase.total_received_quantity ??
+                                      0
+                                    }
+                                  </strong>
+                                </div>
+
+                                <div>
+                                  Remaining:{" "}
+                                  <strong>
+                                    {
+                                      purchase.total_remaining_quantity ??
+                                      0
+                                    }
+                                  </strong>
+                                </div>
+
+                              </div>
+
+                            </td>
+
+
                             {/* ACTION */}
 
                             <td>
 
-                              <Button
-                                type="button"
-                                variant="outline-danger"
-                                size="sm"
-                                disabled={
-                                  saving
-                                }
-                                onClick={() =>
-                                  handleDelete(
-                                    purchase.id
-                                  )
-                                }
-                              >
+                              <div className="d-flex gap-1">
 
-                                <i className="bi bi-trash" />
+                                {!fullyReceived &&
+                                  status !==
+                                    "cancelled" && (
+                                    <Button
+                                      type="button"
+                                      variant="outline-success"
+                                      size="sm"
+                                      disabled={
+                                        receiving
+                                      }
+                                      onClick={() =>
+                                        handleReceive(
+                                          purchase
+                                        )
+                                      }
+                                    >
 
-                              </Button>
+                                      {receiving ? (
+                                        <Spinner
+                                          animation="border"
+                                          size="sm"
+                                        />
+                                      ) : (
+                                        <>
+                                          <i className="bi bi-box-arrow-in-down me-1" />
+
+                                          Receive
+                                        </>
+                                      )}
+
+                                    </Button>
+                                  )}
+
+
+                                {status !==
+                                  "received" && (
+                                  <Button
+                                    type="button"
+                                    variant="outline-danger"
+                                    size="sm"
+                                    disabled={
+                                      saving ||
+                                      receiving
+                                    }
+                                    onClick={() =>
+                                      handleDelete(
+                                        purchase.id
+                                      )
+                                    }
+                                  >
+
+                                    <i className="bi bi-trash" />
+
+                                  </Button>
+                                )}
+
+                              </div>
 
                             </td>
 
@@ -1237,6 +1573,7 @@ const PurchasesBack = () => {
 
       </Card>
 
+
       {/* ==================================================
           PURCHASE MODAL
       ================================================== */}
@@ -1245,7 +1582,9 @@ const PurchasesBack = () => {
         show={showModal}
 
         onHide={() => {
-          if (!saving) {
+          if (
+            !saving
+          ) {
             setShowModal(false);
           }
         }}
@@ -1257,10 +1596,12 @@ const PurchasesBack = () => {
         branches={branches}
 
         onSave={handleSave}
+
+        saving={saving}
       />
 
     </div>
   );
 };
 
-export default PurchasesBack;
+export default Purchases;

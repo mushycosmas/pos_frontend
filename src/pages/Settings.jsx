@@ -34,7 +34,6 @@ const Settings = () => {
     // API integration will be added here
     console.log("Company settings:", company);
   };
-
   return (
     <div className="container-fluid px-0">
       {/* Page Header */}

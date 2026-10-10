@@ -22,10 +22,8 @@ import {
 const EMPTY_FORM = {
   purchase_number: "",
   supplier: "",
-  branch: 1,
-  order_date: new Date()
-    .toISOString()
-    .split("T")[0],
+  branch: "",
+  order_date: new Date().toISOString().split("T")[0],
   status: "received",
   payment_status: "pending",
   notes: "",
@@ -45,50 +43,34 @@ const EMPTY_ITEM = {
 };
 
 // ==========================================================
-// NUMBER HELPER
+// HELPERS
 // ==========================================================
 
 const toNumber = (value, fallback = 0) => {
-  if (
-    value === null ||
-    value === undefined ||
-    value === ""
-  ) {
+  if (value === null || value === undefined || value === "") {
     return fallback;
   }
 
   const number = Number(value);
 
-  return Number.isFinite(number)
-    ? number
-    : fallback;
+  return Number.isFinite(number) ? number : fallback;
 };
 
-// ==========================================================
-// SAFE FIXED NUMBER
-// ==========================================================
+const fixedNumber = (value, decimals = 2) =>
+  Number(toNumber(value).toFixed(decimals));
 
-const fixedNumber = (
-  value,
-  decimals = 2
-) => {
-  return Number(
-    toNumber(value).toFixed(decimals)
-  );
+const today = () => {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
 };
-
-// ==========================================================
-// DATE HELPER
-// ==========================================================
 
 const formatDateForInput = (value) => {
-  if (!value) {
-    return new Date()
-      .toISOString()
-      .split("T")[0];
-  }
+  if (!value) return today();
 
-  // Already YYYY-MM-DD
   if (
     typeof value === "string" &&
     /^\d{4}-\d{2}-\d{2}$/.test(value)
@@ -98,89 +80,52 @@ const formatDateForInput = (value) => {
 
   const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) {
-    return new Date()
-      .toISOString()
-      .split("T")[0];
-  }
+  if (Number.isNaN(date.getTime())) return today();
 
-  return date
-    .toISOString()
-    .split("T")[0];
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
 };
-
-// ==========================================================
-// GENERATE PURCHASE NUMBER
-// ==========================================================
 
 const generatePurchaseNumber = () => {
   const now = new Date();
 
-  const year = now.getFullYear();
+  const datePart = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0"),
+  ].join("");
 
-  const month = String(
-    now.getMonth() + 1
-  ).padStart(2, "0");
+  const timePart = [
+    String(now.getHours()).padStart(2, "0"),
+    String(now.getMinutes()).padStart(2, "0"),
+    String(now.getSeconds()).padStart(2, "0"),
+  ].join("");
 
-  const day = String(
-    now.getDate()
-  ).padStart(2, "0");
-
-  const hours = String(
-    now.getHours()
-  ).padStart(2, "0");
-
-  const minutes = String(
-    now.getMinutes()
-  ).padStart(2, "0");
-
-  const seconds = String(
-    now.getSeconds()
-  ).padStart(2, "0");
-
-  return `PUR-${year}${month}${day}-${hours}${minutes}${seconds}`;
+  return `PUR-${datePart}-${timePart}`;
 };
 
-// ==========================================================
-// GET PRODUCT ID
-// ==========================================================
-
-const getProductId = (item) => {
-  if (
-    item?.product &&
-    typeof item.product === "object"
-  ) {
-    return (
-      item.product.id ??
-      item.product.pk ??
-      ""
-    );
+const getRelatedId = (value) => {
+  if (value && typeof value === "object") {
+    return value.id ?? value.pk ?? "";
   }
 
-  return (
-    item?.product_id ??
-    item?.productId ??
+  return value ?? "";
+};
+
+const getProductId = (item) =>
+  getRelatedId(
     item?.product ??
-    ""
+      item?.product_id ??
+      item?.productId
   );
-};
 
-// ==========================================================
-// GET PRODUCT NAME
-// ==========================================================
+const getProductName = (item, products = []) => {
+  if (item?.product_name) return item.product_name;
 
-const getProductName = (
-  item,
-  products
-) => {
-  if (item?.product_name) {
-    return item.product_name;
-  }
-
-  if (
-    item?.product &&
-    typeof item.product === "object"
-  ) {
+  if (item?.product && typeof item.product === "object") {
     return (
       item.product.name ||
       item.product.product_name ||
@@ -189,141 +134,56 @@ const getProductName = (
     );
   }
 
-  const productId =
-    getProductId(item);
+  const productId = getProductId(item);
 
   const product = products.find(
-    (currentProduct) =>
-      Number(currentProduct.id) ===
-      Number(productId)
+    (entry) => String(entry.id) === String(productId)
   );
 
-  return (
-    product?.name ||
-    product?.product_name ||
-    "Product"
-  );
+  return product?.name || product?.product_name || "Product";
 };
 
-// ==========================================================
-// NORMALIZE PURCHASE ITEM
-// ==========================================================
-
-const normalizePurchaseItem = (
-  item,
-  products
-) => {
-  const productId =
-    getProductId(item);
-
-  const quantity = toNumber(
-    item?.quantity,
-    1
-  );
-
+const normalizePurchaseItem = (item, products) => {
+  const productId = getProductId(item);
+  const quantity = toNumber(item?.quantity, 1);
   const unitCost = toNumber(
-    item?.unit_cost ??
-      item?.unitCost ??
-      item?.cost_price,
+    item?.unit_cost ?? item?.unitCost ?? item?.cost_price,
     0
   );
-
   const discount = toNumber(
-    item?.discount ??
-      item?.discount_rate,
+    item?.discount ?? item?.discount_rate,
     0
   );
+  const tax = toNumber(item?.tax ?? item?.tax_rate, 18);
 
-  const tax = toNumber(
-    item?.tax ??
-      item?.tax_rate,
-    18
-  );
-
-  const gross =
-    quantity * unitCost;
-
-  const discountAmount =
-    gross * (discount / 100);
-
-  const taxableAmount =
-    gross - discountAmount;
-
-  const taxAmount =
-    taxableAmount * (tax / 100);
-
-  const calculatedTotal =
-    taxableAmount + taxAmount;
+  const gross = quantity * unitCost;
+  const discountAmount = gross * (discount / 100);
+  const subtotal = gross - discountAmount;
+  const taxAmount = subtotal * (tax / 100);
+  const calculatedTotal = subtotal + taxAmount;
 
   const backendTotal =
-    item?.total ??
-    item?.total_amount ??
-    item?.line_total;
-
-  const total =
-    backendTotal !== undefined &&
-    backendTotal !== null &&
-    backendTotal !== ""
-      ? toNumber(
-          backendTotal,
-          calculatedTotal
-        )
-      : calculatedTotal;
+    item?.total ?? item?.total_amount ?? item?.line_total;
 
   return {
     id: item?.id,
-
-    product:
-      productId !== ""
-        ? Number(productId)
-        : "",
-
-    product_name:
-      getProductName(
-        item,
-        products
-      ),
-
-    quantity: toNumber(
-      quantity,
-      1
-    ),
-
-    received_quantity:
-      toNumber(
-        item?.received_quantity,
-        0
-      ),
-
-    unit_cost:
-      fixedNumber(unitCost),
-
-    discount:
-      fixedNumber(discount),
-
-    tax:
-      fixedNumber(tax),
-
-    gross:
-      fixedNumber(gross),
-
-    discount_amount:
-      fixedNumber(
-        discountAmount
-      ),
-
-    subtotal:
-      fixedNumber(
-        taxableAmount
-      ),
-
-    tax_amount:
-      fixedNumber(
-        taxAmount
-      ),
-
+    product: productId !== "" ? Number(productId) : "",
+    product_name: getProductName(item, products),
+    quantity,
+    received_quantity: toNumber(item?.received_quantity, 0),
+    unit_cost: fixedNumber(unitCost),
+    discount: fixedNumber(discount),
+    tax: fixedNumber(tax),
+    gross: fixedNumber(gross),
+    discount_amount: fixedNumber(discountAmount),
+    subtotal: fixedNumber(subtotal),
+    tax_amount: fixedNumber(taxAmount),
     total:
-      fixedNumber(total),
+      backendTotal !== undefined &&
+      backendTotal !== null &&
+      backendTotal !== ""
+        ? fixedNumber(toNumber(backendTotal, calculatedTotal))
+        : fixedNumber(calculatedTotal),
   };
 };
 
@@ -340,348 +200,202 @@ const PurchaseModal = ({
   suppliers = [],
   branches = [],
 
+  currentBranch = null,
+  currentBranchId = "",
+
   purchase = null,
   editing = false,
   saving: parentSaving = false,
 }) => {
-  // ========================================================
-  // STATE
-  // ========================================================
+  const [form, setForm] = useState({ ...EMPTY_FORM });
+  const [item, setItem] = useState({ ...EMPTY_ITEM });
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  const [form, setForm] = useState({
-    ...EMPTY_FORM,
-  });
+  const isEditing = Boolean(editing && purchase?.id);
+  const isBusy = saving || parentSaving;
 
-  const [item, setItem] = useState({
-    ...EMPTY_ITEM,
-  });
+  const selectedBranchId =
+    currentBranchId !== null &&
+    currentBranchId !== undefined
+      ? String(currentBranchId)
+      : "";
 
-  const [error, setError] =
-    useState("");
-
-  const [saving, setSaving] =
-    useState(false);
-
-  // ========================================================
-  // EFFECTIVE EDIT MODE
-  // ========================================================
-
-  const isEditing =
-    Boolean(
-      editing && purchase?.id
-    );
+  const selectedBranchName =
+    currentBranch?.name ||
+    currentBranch?.branch_name ||
+    branches.find(
+      (branch) => String(branch.id) === selectedBranchId
+    )?.name ||
+    "";
 
   // ========================================================
   // INITIALIZE FORM
-  // CREATE OR EDIT
   // ========================================================
 
   useEffect(() => {
-    if (!show) {
-      return;
-    }
+    if (!show) return;
 
     setError("");
     setSaving(false);
+    setItem({ ...EMPTY_ITEM });
 
-    // ======================================================
-    // EDIT PURCHASE
-    // ======================================================
-
-    if (
-      purchase &&
-      purchase.id
-    ) {
-      const rawItems =
-        Array.isArray(
-          purchase.items
-        )
-          ? purchase.items
-          : Array.isArray(
-              purchase.purchase_items
-            )
+    if (purchase?.id) {
+      const rawItems = Array.isArray(purchase.items)
+        ? purchase.items
+        : Array.isArray(purchase.purchase_items)
           ? purchase.purchase_items
           : [];
 
-      const normalizedItems =
-        rawItems.map(
-          (currentItem) =>
-            normalizePurchaseItem(
-              currentItem,
-              products
-            )
-        );
+      const supplierId = getRelatedId(
+        purchase.supplier ??
+          purchase.supplier_id
+      );
 
-      const supplierId =
-        purchase?.supplier?.id ??
-        purchase?.supplier_id ??
-        purchase?.supplier ??
-        "";
-
-      const branchId =
-        purchase?.branch?.id ??
-        purchase?.branch_id ??
-        purchase?.branch ??
-        1;
-
-      const purchaseNumber =
-        purchase?.purchase_number ??
-        purchase?.purchaseNumber ??
-        "";
-
-      const orderDate =
-        purchase?.order_date ??
-        purchase?.purchase_date ??
-        purchase?.created_at;
+      const branchId = getRelatedId(
+        purchase.branch ??
+          purchase.branch_id ??
+          purchase.branchId
+      );
 
       setForm({
-        purchase_number:
-          String(
-            purchaseNumber
-          ),
-
-        supplier:
-          supplierId !== ""
-            ? String(
-                supplierId
-              )
-            : "",
-
-        branch:
-          branchId !== ""
-            ? String(branchId)
-            : "1",
-
-        order_date:
-          formatDateForInput(
-            orderDate
-          ),
-
-        status:
-          purchase?.status ||
-          "received",
-
-        payment_status:
-          purchase?.payment_status ||
-          "pending",
-
-        notes:
-          purchase?.notes || "",
-
-        items:
-          normalizedItems,
+        purchase_number: String(
+          purchase.purchase_number ??
+            purchase.purchaseNumber ??
+            ""
+        ),
+        supplier: supplierId !== "" ? String(supplierId) : "",
+        branch: branchId !== "" ? String(branchId) : selectedBranchId,
+        order_date: formatDateForInput(
+          purchase.order_date ??
+            purchase.purchase_date ??
+            purchase.created_at
+        ),
+        status: purchase.status || "received",
+        payment_status: purchase.payment_status || "pending",
+        notes: purchase.notes || "",
+        items: rawItems.map((entry) =>
+          normalizePurchaseItem(entry, products)
+        ),
       });
-
-      setItem({
-        ...EMPTY_ITEM,
-      });
-
-      console.log(
-        "EDIT PURCHASE:",
-        purchase
-      );
-
-      console.log(
-        "NORMALIZED EDIT FORM:",
-        {
-          purchase_number:
-            String(
-              purchaseNumber
-            ),
-          supplier:
-            String(
-              supplierId
-            ),
-          branch:
-            String(
-              branchId
-            ),
-          order_date:
-            formatDateForInput(
-              orderDate
-            ),
-          status:
-            purchase?.status ||
-            "received",
-          payment_status:
-            purchase?.payment_status ||
-            "pending",
-          notes:
-            purchase?.notes || "",
-          items:
-            normalizedItems,
-        }
-      );
 
       return;
     }
 
-    // ======================================================
-    // CREATE NEW PURCHASE
-    // ======================================================
-
     setForm({
       ...EMPTY_FORM,
-
-      purchase_number:
-        generatePurchaseNumber(),
-
+      purchase_number: generatePurchaseNumber(),
       supplier: "",
-
-      branch:
-        branches.length > 0
-          ? String(
-              branches[0].id
-            )
-          : "1",
-
-      order_date:
-        new Date()
-          .toISOString()
-          .split("T")[0],
-
+      branch: selectedBranchId,
+      order_date: today(),
       status: "received",
-
-      payment_status:
-        "pending",
-
+      payment_status: "pending",
       notes: "",
-
       items: [],
-    });
-
-    setItem({
-      ...EMPTY_ITEM,
     });
   }, [
     show,
     purchase,
     products,
-    branches,
+    selectedBranchId,
   ]);
 
   // ========================================================
-  // FORM CHANGE
+  // FORM CHANGES
   // ========================================================
 
-  const handleFormChange = (
-    event
-  ) => {
-    const {
-      name,
-      value,
-    } = event.target;
+  const handleFormChange = (event) => {
+    const { name, value } = event.target;
 
-    setForm(
-      (previous) => ({
-        ...previous,
-        [name]: value,
-      })
-    );
+    // New purchases must use the selected branch.
+    if (name === "branch" && !isEditing) return;
+
+    setForm((previous) => ({
+      ...previous,
+      [name]: value,
+    }));
   };
 
-  // ========================================================
-  // ITEM CHANGE
-  // ========================================================
+  const handleItemChange = (event) => {
+    const { name, value } = event.target;
 
-  const handleItemChange = (
-    event
-  ) => {
-    const {
-      name,
-      value,
-    } = event.target;
-
-    setItem(
-      (previous) => ({
-        ...previous,
-        [name]: value,
-      })
-    );
+    setItem((previous) => ({
+      ...previous,
+      [name]: value,
+    }));
   };
 
   // ========================================================
   // SELECTED PRODUCT
   // ========================================================
 
-  const selectedProduct =
-    useMemo(() => {
-      if (!item.product) {
-        return null;
+  const selectedProduct = useMemo(() => {
+    if (!item.product) return null;
+
+    return products.find(
+      (product) => String(product.id) === String(item.product)
+    ) || null;
+  }, [item.product, products]);
+
+  // ========================================================
+  // ITEM CALCULATIONS
+  // ========================================================
+
+  const currentItemCalculation = useMemo(() => {
+    const quantity = toNumber(item.quantity);
+    const unitCost = toNumber(item.unit_cost);
+    const discountRate = toNumber(item.discount);
+    const taxRate = toNumber(item.tax);
+
+    const gross = quantity * unitCost;
+    const discountAmount = gross * (discountRate / 100);
+    const subtotal = gross - discountAmount;
+    const taxAmount = subtotal * (taxRate / 100);
+
+    return {
+      gross,
+      discountAmount,
+      subtotal,
+      taxAmount,
+      total: subtotal + taxAmount,
+    };
+  }, [
+    item.quantity,
+    item.unit_cost,
+    item.discount,
+    item.tax,
+  ]);
+
+  // ========================================================
+  // TOTALS
+  // ========================================================
+
+  const totals = useMemo(() => {
+    return form.items.reduce(
+      (result, entry) => ({
+        subtotal: result.subtotal + toNumber(entry.subtotal),
+        discount:
+          result.discount + toNumber(entry.discount_amount),
+        tax: result.tax + toNumber(entry.tax_amount),
+        total: result.total + toNumber(entry.total),
+        quantity: result.quantity + toNumber(entry.quantity),
+      }),
+      {
+        subtotal: 0,
+        discount: 0,
+        tax: 0,
+        total: 0,
+        quantity: 0,
       }
+    );
+  }, [form.items]);
 
-      return products.find(
-        (product) =>
-          Number(product.id) ===
-          Number(item.product)
-      );
-    }, [
-      item.product,
-      products,
-    ]);
-
-  // ========================================================
-  // CURRENT ITEM CALCULATION
-  // ========================================================
-
-  const currentItemCalculation =
-    useMemo(() => {
-      const quantity =
-        toNumber(
-          item.quantity,
-          0
-        );
-
-      const unitCost =
-        toNumber(
-          item.unit_cost,
-          0
-        );
-
-      const discountRate =
-        toNumber(
-          item.discount,
-          0
-        );
-
-      const taxRate =
-        toNumber(
-          item.tax,
-          0
-        );
-
-      const gross =
-        quantity * unitCost;
-
-      const discountAmount =
-        gross *
-        (discountRate / 100);
-
-      const taxableAmount =
-        gross -
-        discountAmount;
-
-      const taxAmount =
-        taxableAmount *
-        (taxRate / 100);
-
-      const total =
-        taxableAmount +
-        taxAmount;
-
-      return {
-        gross,
-        discountAmount,
-        taxableAmount,
-        taxAmount,
-        total,
-      };
-    }, [
-      item.quantity,
-      item.unit_cost,
-      item.discount,
-      item.tax,
-    ]);
+  const formatCurrency = (value) =>
+    new Intl.NumberFormat("en-TZ", {
+      style: "currency",
+      currency: "TZS",
+      maximumFractionDigits: 2,
+    }).format(toNumber(value));
 
   // ========================================================
   // ADD ITEM
@@ -690,650 +404,156 @@ const PurchaseModal = ({
   const handleAddItem = () => {
     setError("");
 
-    // ------------------------------------------------------
-    // PRODUCT
-    // ------------------------------------------------------
-
     if (!item.product) {
-      setError(
-        "Please select a product."
-      );
-
+      setError("Please select a product.");
       return;
     }
 
-    // ------------------------------------------------------
-    // QUANTITY
-    // ------------------------------------------------------
+    const quantity = toNumber(item.quantity, 0);
 
-    const quantity =
-      toNumber(
-        item.quantity,
-        0
-      );
-
-    if (
-      !Number.isInteger(
-        quantity
-      ) ||
-      quantity <= 0
-    ) {
-      setError(
-        "Quantity must be a whole number greater than zero."
-      );
-
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      setError("Quantity must be a whole number greater than zero.");
       return;
     }
 
-    // ------------------------------------------------------
-    // UNIT COST
-    // ------------------------------------------------------
-
-    if (
-      item.unit_cost === "" ||
-      item.unit_cost === null ||
-      item.unit_cost === undefined
-    ) {
-      setError(
-        "Please enter a valid unit cost."
-      );
-
+    if (item.unit_cost === "" || item.unit_cost === null) {
+      setError("Please enter a valid unit cost.");
       return;
     }
 
-    const unitCost =
-      toNumber(
-        item.unit_cost,
-        -1
-      );
+    const unitCost = toNumber(item.unit_cost, -1);
 
-    if (
-      !Number.isFinite(
-        unitCost
-      ) ||
-      unitCost < 0
-    ) {
-      setError(
-        "Please enter a valid unit cost."
-      );
-
+    if (unitCost < 0) {
+      setError("Unit cost cannot be negative.");
       return;
     }
 
-    // ------------------------------------------------------
-    // DISCOUNT
-    // ------------------------------------------------------
-
-    const discount =
-      toNumber(
-        item.discount,
-        0
-      );
-
-    if (
-      !Number.isFinite(
-        discount
-      ) ||
-      discount < 0 ||
-      discount > 100
-    ) {
-      setError(
-        "Discount must be between 0 and 100%."
-      );
-
+    const discount = toNumber(item.discount, -1);
+    if (discount < 0 || discount > 100) {
+      setError("Discount must be between 0 and 100%.");
       return;
     }
 
-    // ------------------------------------------------------
-    // TAX
-    // ------------------------------------------------------
-
-    const tax =
-      toNumber(
-        item.tax,
-        0
-      );
-
-    if (
-      !Number.isFinite(
-        tax
-      ) ||
-      tax < 0 ||
-      tax > 100
-    ) {
-      setError(
-        "Tax must be between 0 and 100%."
-      );
-
+    const tax = toNumber(item.tax, -1);
+    if (tax < 0 || tax > 100) {
+      setError("Tax must be between 0 and 100%.");
       return;
     }
 
-    // ------------------------------------------------------
-    // DUPLICATE PRODUCT
-    // ------------------------------------------------------
-
-    const exists =
-      form.items.some(
-        (existingItem) =>
-          Number(
-            existingItem.product
-          ) ===
-          Number(item.product)
-      );
+    const exists = form.items.some(
+      (entry) => String(entry.product) === String(item.product)
+    );
 
     if (exists) {
-      setError(
-        "This product has already been added."
-      );
-
+      setError("This product has already been added.");
       return;
     }
 
-    // ------------------------------------------------------
-    // CALCULATIONS
-    // ------------------------------------------------------
-
-    const {
-      gross,
-      discountAmount,
-      taxableAmount,
-      taxAmount,
-      total,
-    } =
-      currentItemCalculation;
-
-    // ------------------------------------------------------
-    // NEW ITEM
-    // ------------------------------------------------------
+    const calculation = currentItemCalculation;
 
     const newItem = {
-      product:
-        Number(
-          item.product
-        ),
-
+      product: Number(item.product),
       product_name:
         selectedProduct?.name ||
         selectedProduct?.product_name ||
         "Product",
-
       quantity,
-
-      unit_cost:
-        fixedNumber(
-          unitCost
-        ),
-
-      discount:
-        fixedNumber(
-          discount
-        ),
-
-      tax:
-        fixedNumber(
-          tax
-        ),
-
-      gross:
-        fixedNumber(
-          gross
-        ),
-
-      discount_amount:
-        fixedNumber(
-          discountAmount
-        ),
-
-      subtotal:
-        fixedNumber(
-          taxableAmount
-        ),
-
-      tax_amount:
-        fixedNumber(
-          taxAmount
-        ),
-
-      total:
-        fixedNumber(
-          total
-        ),
+      unit_cost: fixedNumber(unitCost),
+      discount: fixedNumber(discount),
+      tax: fixedNumber(tax),
+      gross: fixedNumber(calculation.gross),
+      discount_amount: fixedNumber(calculation.discountAmount),
+      subtotal: fixedNumber(calculation.subtotal),
+      tax_amount: fixedNumber(calculation.taxAmount),
+      total: fixedNumber(calculation.total),
     };
 
-    setForm(
-      (previous) => ({
-        ...previous,
+    setForm((previous) => ({
+      ...previous,
+      items: [...previous.items, newItem],
+    }));
 
-        items: [
-          ...previous.items,
-          newItem,
-        ],
-      })
-    );
-
-    setItem({
-      ...EMPTY_ITEM,
-    });
+    setItem({ ...EMPTY_ITEM });
   };
 
   // ========================================================
   // REMOVE ITEM
   // ========================================================
 
-  const handleRemoveItem = (
-    index
-  ) => {
-    setForm(
-      (previous) => ({
-        ...previous,
-
-        items:
-          previous.items.filter(
-            (
-              _,
-              itemIndex
-            ) =>
-              itemIndex !==
-              index
-          ),
-      })
-    );
+  const handleRemoveItem = (index) => {
+    setForm((previous) => ({
+      ...previous,
+      items: previous.items.filter(
+        (_, itemIndex) => itemIndex !== index
+      ),
+    }));
   };
 
   // ========================================================
-  // PURCHASE TOTALS
+  // SAVE PURCHASE
   // ========================================================
 
-  const totals = useMemo(() => {
-    return form.items.reduce(
-      (
-        result,
-        currentItem
-      ) => {
-        const quantity =
-          toNumber(
-            currentItem.quantity,
-            0
-          );
-
-        const unitCost =
-          toNumber(
-            currentItem.unit_cost,
-            0
-          );
-
-        const discountRate =
-          toNumber(
-            currentItem.discount,
-            0
-          );
-
-        const taxRate =
-          toNumber(
-            currentItem.tax,
-            0
-          );
-
-        const gross =
-          quantity *
-          unitCost;
-
-        const discountAmount =
-          gross *
-          (discountRate /
-            100);
-
-        const taxableAmount =
-          gross -
-          discountAmount;
-
-        const taxAmount =
-          taxableAmount *
-          (taxRate / 100);
-
-        const itemTotal =
-          taxableAmount +
-          taxAmount;
-
-        result.gross +=
-          gross;
-
-        result.discount +=
-          discountAmount;
-
-        result.subtotal +=
-          taxableAmount;
-
-        result.tax +=
-          taxAmount;
-
-        result.total +=
-          itemTotal;
-
-        return result;
-      },
-      {
-        gross: 0,
-        discount: 0,
-        subtotal: 0,
-        tax: 0,
-        total: 0,
-      }
-    );
-  }, [form.items]);
-
-  // ========================================================
-  // FORMAT CURRENCY
-  // ========================================================
-
-  const formatCurrency = (
-    value
-  ) => {
-    const amount =
-      toNumber(value);
-
-    return `TSh ${amount.toLocaleString(
-      "en-TZ",
-      {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 2,
-      }
-    )}`;
-  };
-
-  // ========================================================
-  // SUBMIT
-  // ========================================================
-
-  const handleSubmit = async (
-    event
-  ) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
-
     setError("");
 
-    // ------------------------------------------------------
-    // PURCHASE NUMBER
-    // ------------------------------------------------------
-
-    const purchaseNumber =
-      String(
-        form.purchase_number ||
-          ""
-      ).trim();
-
-    if (!purchaseNumber) {
-      setError(
-        "Purchase number is required."
-      );
-
-      return;
-    }
-
-    // ------------------------------------------------------
-    // SUPPLIER
-    // ------------------------------------------------------
-
     if (!form.supplier) {
-      setError(
-        "Please select a supplier."
-      );
-
+      setError("Please select a supplier.");
       return;
     }
-
-    // ------------------------------------------------------
-    // BRANCH
-    // ------------------------------------------------------
-
-    if (!form.branch) {
-      setError(
-        "Please select a branch."
-      );
-
-      return;
-    }
-
-    // ------------------------------------------------------
-    // DATE
-    // ------------------------------------------------------
 
     if (!form.order_date) {
-      setError(
-        "Purchase date is required."
-      );
-
+      setError("Please select an order date.");
       return;
     }
 
-    // ------------------------------------------------------
-    // ITEMS
-    // ------------------------------------------------------
-
-    if (
-      !Array.isArray(
-        form.items
-      ) ||
-      form.items.length === 0
-    ) {
-      setError(
-        "Please add at least one product."
-      );
-
+    if (!form.items.length) {
+      setError("Please add at least one product.");
       return;
     }
 
-    // ------------------------------------------------------
-    // TOTAL
-    // ------------------------------------------------------
+    // Always use BranchContext for a new purchase.
+    const branchId = isEditing
+      ? form.branch
+      : selectedBranchId;
 
-    if (
-      !Number.isFinite(
-        totals.total
-      ) ||
-      totals.total <= 0
-    ) {
-      setError(
-        "Purchase total must be greater than zero."
-      );
-
+    if (!branchId) {
+      setError("Please select a branch before saving the purchase.");
       return;
     }
-
-    // ======================================================
-    // BACKEND PAYLOAD
-    // ======================================================
 
     const payload = {
-      purchase_number:
-        purchaseNumber,
-
-      supplier:
-        Number(
-          form.supplier
-        ),
-
-      branch:
-        Number(
-          form.branch
-        ),
-
-      order_date:
-        form.order_date,
-
-      status:
-        form.status ||
-        "received",
-
-      payment_status:
-        form.payment_status ||
-        "pending",
-
-      notes:
-        String(
-          form.notes || ""
-        ).trim(),
-
-      items:
-        form.items.map(
-          (currentItem) => ({
-            product:
-              Number(
-                currentItem.product
-              ),
-
-            quantity:
-              toNumber(
-                currentItem.quantity
-              ),
-
-            received_quantity:
-              toNumber(
-                currentItem.received_quantity,
-                0
-              ),
-
-            unit_cost:
-              fixedNumber(
-                currentItem.unit_cost
-              ),
-
-            discount:
-              fixedNumber(
-                currentItem.discount
-              ),
-
-            tax:
-              fixedNumber(
-                currentItem.tax
-              ),
-
-            total:
-              fixedNumber(
-                currentItem.total
-              ),
-          })
-        ),
+      ...form,
+      supplier: Number(form.supplier),
+      branch: Number(branchId),
+      items: form.items.map((entry) => ({
+        product: Number(entry.product),
+        quantity: Number(entry.quantity),
+        unit_cost: Number(entry.unit_cost),
+        discount: Number(entry.discount),
+        tax: Number(entry.tax),
+      })),
     };
-
-    // ======================================================
-    // DEBUG
-    // ======================================================
-
-    console.log(
-      "=========================================="
-    );
-
-    console.log(
-      isEditing
-        ? "UPDATE PURCHASE PAYLOAD"
-        : "CREATE PURCHASE PAYLOAD"
-    );
-
-    console.log(
-      JSON.stringify(
-        payload,
-        null,
-        2
-      )
-    );
-
-    console.log(
-      "PURCHASE TOTALS",
-      totals
-    );
-
-    console.log(
-      "=========================================="
-    );
-
-    // ======================================================
-    // SAVE
-    // ======================================================
 
     try {
       setSaving(true);
 
-      await onSave(payload);
+      const result = await onSave(payload);
 
+      if (result === false) return;
+
+      onHide();
     } catch (err) {
-      console.error(
-        "Purchase save error:",
-        err
+      console.error("Failed to submit purchase:", err);
+
+      setError(
+        err?.response?.data?.detail ||
+          err?.response?.data?.message ||
+          "Failed to save purchase."
       );
-
-      console.error(
-        "Backend response:",
-        err?.response?.data
-      );
-
-      const backendError =
-        err?.response?.data;
-
-      if (
-        backendError &&
-        typeof backendError ===
-          "object"
-      ) {
-        const message =
-          Object.entries(
-            backendError
-          )
-            .map(
-              ([
-                field,
-                messages,
-              ]) => {
-                const formatted =
-                  Array.isArray(
-                    messages
-                  )
-                    ? messages.join(
-                        ", "
-                      )
-                    : String(
-                        messages
-                      );
-
-                return `${field}: ${formatted}`;
-              }
-            )
-            .join("\n");
-
-        setError(
-          message ||
-            "Failed to save purchase."
-        );
-      } else {
-        setError(
-          backendError
-            ? String(
-                backendError
-              )
-            : err?.message ||
-                "Failed to save purchase. Please try again."
-        );
-      }
     } finally {
       setSaving(false);
     }
-  };
-
-  // ========================================================
-  // CLOSE
-  // ========================================================
-
-  const handleClose = () => {
-    if (
-      saving ||
-      parentSaving
-    ) {
-      return;
-    }
-
-    setError("");
-
-    onHide();
   };
 
   // ========================================================
@@ -1343,912 +563,413 @@ const PurchaseModal = ({
   return (
     <Modal
       show={show}
-      onHide={handleClose}
+      onHide={isBusy ? undefined : onHide}
       size="xl"
       centered
-      backdrop={
-        saving ||
-        parentSaving
-          ? "static"
-          : true
-      }
-      keyboard={
-        !saving &&
-        !parentSaving
-      }
+      backdrop={isBusy ? "static" : true}
+      keyboard={!isBusy}
     >
-      <Form
-        onSubmit={handleSubmit}
-      >
-
-        {/* ==================================================
-            HEADER
-        ================================================== */}
-
-        <Modal.Header
-          closeButton={
-            !saving &&
-            !parentSaving
-          }
-        >
+      <Form onSubmit={handleSubmit}>
+        <Modal.Header closeButton={!isBusy}>
           <Modal.Title>
-            {isEditing
-              ? "Edit Purchase"
-              : "New Purchase"}
+            {isEditing ? "Edit Purchase" : "Create Purchase"}
           </Modal.Title>
         </Modal.Header>
 
-        {/* ==================================================
-            BODY
-        ================================================== */}
-
         <Modal.Body>
-
-          {/* ERROR */}
-
           {error && (
             <Alert
               variant="danger"
-              className="mb-4"
-              style={{
-                whiteSpace:
-                  "pre-line",
-              }}
+              dismissible
+              onClose={() => setError("")}
             >
-              <i className="bi bi-exclamation-triangle me-2" />
-
               {error}
             </Alert>
           )}
 
-          {/* =================================================
-              PURCHASE INFORMATION
-          ================================================= */}
+          {!isEditing && !selectedBranchId && (
+            <Alert variant="warning">
+              No branch is selected. Select a branch before creating
+              a purchase.
+            </Alert>
+          )}
 
-          <Card className="border-0 bg-light mb-4">
+          <Card className="mb-3">
+            <Card.Header>Purchase Details</Card.Header>
 
             <Card.Body>
-
-              <h6 className="mb-3">
-                Purchase Information
-              </h6>
-
               <Row className="g-3">
-
-                {/* PURCHASE NUMBER */}
-
                 <Col md={4}>
-
                   <Form.Group>
-
-                    <Form.Label>
-                      Purchase Number
-                    </Form.Label>
-
+                    <Form.Label>Purchase Number</Form.Label>
                     <Form.Control
-                      type="text"
                       name="purchase_number"
-                      value={
-                        form.purchase_number
-                      }
-                      onChange={
-                        handleFormChange
-                      }
-                      required
+                      value={form.purchase_number}
+                      onChange={handleFormChange}
+                      readOnly
                     />
-
-                    {!isEditing && (
-                      <Form.Text className="text-muted">
-                        Automatically generated.
-                      </Form.Text>
-                    )}
-
                   </Form.Group>
-
                 </Col>
 
-                {/* SUPPLIER */}
-
                 <Col md={4}>
-
                   <Form.Group>
+                    <Form.Label>Branch</Form.Label>
 
-                    <Form.Label>
-                      Supplier
-                    </Form.Label>
+                    {isEditing ? (
+                      <Form.Select
+                        name="branch"
+                        value={form.branch}
+                        onChange={handleFormChange}
+                        disabled={isBusy}
+                        required
+                      >
+                        <option value="">Select branch</option>
 
-                    <Form.Select
-                      name="supplier"
-                      value={
-                        form.supplier
-                      }
-                      onChange={
-                        handleFormChange
-                      }
-                      required
-                    >
-
-                      <option value="">
-                        Select supplier
-                      </option>
-
-                      {suppliers.map(
-                        (supplier) => (
+                        {branches.map((branch) => (
                           <option
-                            key={
-                              supplier.id
-                            }
-                            value={
-                              supplier.id
-                            }
+                            key={branch.id}
+                            value={String(branch.id)}
                           >
-                            {
-                              supplier.name
-                            }
+                            {branch.name ||
+                              branch.branch_name ||
+                              `Branch ${branch.id}`}
                           </option>
-                        )
-                      )}
-
-                    </Form.Select>
-
-                    {suppliers.length ===
-                      0 && (
-                      <Form.Text className="text-danger">
-                        No suppliers available.
-                      </Form.Text>
+                        ))}
+                      </Form.Select>
+                    ) : (
+                      <Form.Control
+                        value={
+                          selectedBranchName ||
+                          (selectedBranchId
+                            ? `Branch ${selectedBranchId}`
+                            : "")
+                        }
+                        placeholder="Select a branch first"
+                        readOnly
+                      />
                     )}
-
                   </Form.Group>
-
                 </Col>
 
-                {/* BRANCH */}
-
                 <Col md={4}>
-
                   <Form.Group>
-
-                    <Form.Label>
-                      Branch
-                    </Form.Label>
-
-                    <Form.Select
-                      name="branch"
-                      value={
-                        form.branch
-                      }
-                      onChange={
-                        handleFormChange
-                      }
-                      required
-                    >
-
-                      {branches.length >
-                      0 ? (
-                        branches.map(
-                          (branch) => (
-                            <option
-                              key={
-                                branch.id
-                              }
-                              value={
-                                branch.id
-                              }
-                            >
-                              {
-                                branch.name
-                              }
-                            </option>
-                          )
-                        )
-                      ) : (
-                        <option value="1">
-                          Branch 1
-                        </option>
-                      )}
-
-                    </Form.Select>
-
-                  </Form.Group>
-
-                </Col>
-
-                {/* DATE */}
-
-                <Col md={4}>
-
-                  <Form.Group>
-
-                    <Form.Label>
-                      Purchase Date
-                    </Form.Label>
-
+                    <Form.Label>Order Date</Form.Label>
                     <Form.Control
                       type="date"
                       name="order_date"
-                      value={
-                        form.order_date
-                      }
-                      onChange={
-                        handleFormChange
-                      }
+                      value={form.order_date}
+                      onChange={handleFormChange}
+                      disabled={isBusy}
                       required
                     />
-
                   </Form.Group>
-
                 </Col>
 
-                {/* STATUS */}
-
-                <Col md={4}>
-
+                <Col md={6}>
                   <Form.Group>
+                    <Form.Label>Supplier</Form.Label>
+                    <Form.Select
+                      name="supplier"
+                      value={form.supplier}
+                      onChange={handleFormChange}
+                      disabled={isBusy}
+                      required
+                    >
+                      <option value="">Select supplier</option>
 
-                    <Form.Label>
-                      Status
-                    </Form.Label>
+                      {suppliers.map((supplier) => (
+                        <option
+                          key={supplier.id}
+                          value={String(supplier.id)}
+                        >
+                          {supplier.name ||
+                            supplier.supplier_name ||
+                            supplier.company_name ||
+                            `Supplier ${supplier.id}`}
+                        </option>
+                      ))}
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
 
+                <Col md={3}>
+                  <Form.Group>
+                    <Form.Label>Status</Form.Label>
                     <Form.Select
                       name="status"
-                      value={
-                        form.status
-                      }
-                      onChange={
-                        handleFormChange
-                      }
+                      value={form.status}
+                      onChange={handleFormChange}
+                      disabled={isBusy}
                     >
-
-                      <option value="draft">
-                        Draft
-                      </option>
-
-                      <option value="ordered">
-                        Ordered
-                      </option>
-
-                      <option value="received">
-                        Received
-                      </option>
-
-                      <option value="partially_received">
-                        Partially Received
-                      </option>
-
-                      <option value="cancelled">
-                        Cancelled
-                      </option>
-
+                      <option value="draft">Draft</option>
+                      <option value="ordered">Ordered</option>
+                      <option value="received">Received</option>
+                      <option value="cancelled">Cancelled</option>
                     </Form.Select>
-
                   </Form.Group>
-
                 </Col>
 
-                {/* PAYMENT STATUS */}
-
-                <Col md={4}>
-
+                <Col md={3}>
                   <Form.Group>
-
-                    <Form.Label>
-                      Payment Status
-                    </Form.Label>
-
+                    <Form.Label>Payment Status</Form.Label>
                     <Form.Select
                       name="payment_status"
-                      value={
-                        form.payment_status
-                      }
-                      onChange={
-                        handleFormChange
-                      }
+                      value={form.payment_status}
+                      onChange={handleFormChange}
+                      disabled={isBusy}
                     >
-
-                      <option value="pending">
-                        Pending
-                      </option>
-
-                      <option value="paid">
-                        Paid
-                      </option>
-
-                      <option value="partial">
-                        Partial
-                      </option>
-
+                      <option value="pending">Pending</option>
+                      <option value="partial">Partial</option>
+                      <option value="paid">Paid</option>
                     </Form.Select>
-
                   </Form.Group>
-
                 </Col>
 
-                {/* NOTES */}
-
                 <Col md={12}>
-
                   <Form.Group>
-
-                    <Form.Label>
-                      Notes
-                    </Form.Label>
-
+                    <Form.Label>Notes</Form.Label>
                     <Form.Control
                       as="textarea"
                       rows={2}
                       name="notes"
-                      value={
-                        form.notes
-                      }
-                      onChange={
-                        handleFormChange
-                      }
-                      placeholder="Optional notes..."
+                      value={form.notes}
+                      onChange={handleFormChange}
+                      disabled={isBusy}
                     />
-
                   </Form.Group>
-
                 </Col>
-
               </Row>
-
             </Card.Body>
-
           </Card>
 
-          {/* =================================================
-              ADD PRODUCT
-          ================================================= */}
-
-          <Card className="mb-4">
+          <Card className="mb-3">
+            <Card.Header>Add Products</Card.Header>
 
             <Card.Body>
-
-              <h6 className="mb-3">
-                Add Product
-              </h6>
-
               <Row className="g-3 align-items-end">
-
-                {/* PRODUCT */}
-
-                <Col md={3}>
-
+                <Col md={4}>
                   <Form.Group>
-
-                    <Form.Label>
-                      Product
-                    </Form.Label>
-
+                    <Form.Label>Product</Form.Label>
                     <Form.Select
                       name="product"
-                      value={
-                        item.product
-                      }
-                      onChange={
-                        handleItemChange
-                      }
+                      value={item.product}
+                      onChange={handleItemChange}
+                      disabled={isBusy}
                     >
+                      <option value="">Select product</option>
 
-                      <option value="">
-                        Select product
-                      </option>
-
-                      {products.map(
-                        (product) => (
-                          <option
-                            key={
-                              product.id
-                            }
-                            value={
-                              product.id
-                            }
-                          >
-                            {
-                              product.name
-                            }
-                          </option>
-                        )
-                      )}
-
+                      {products.map((product) => (
+                        <option
+                          key={product.id}
+                          value={String(product.id)}
+                        >
+                          {product.name ||
+                            product.product_name ||
+                            `Product ${product.id}`}
+                        </option>
+                      ))}
                     </Form.Select>
-
                   </Form.Group>
-
                 </Col>
 
-                {/* QUANTITY */}
-
                 <Col md={2}>
-
                   <Form.Group>
-
-                    <Form.Label>
-                      Quantity
-                    </Form.Label>
-
+                    <Form.Label>Quantity</Form.Label>
                     <Form.Control
                       type="number"
-                      name="quantity"
                       min="1"
                       step="1"
-                      value={
-                        item.quantity
-                      }
-                      onChange={
-                        handleItemChange
-                      }
+                      name="quantity"
+                      value={item.quantity}
+                      onChange={handleItemChange}
+                      disabled={isBusy}
                     />
-
                   </Form.Group>
-
                 </Col>
 
-                {/* UNIT COST */}
-
                 <Col md={2}>
-
                   <Form.Group>
-
-                    <Form.Label>
-                      Unit Cost
-                    </Form.Label>
-
+                    <Form.Label>Unit Cost (TZS)</Form.Label>
                     <Form.Control
                       type="number"
+                      min="0"
+                      step="0.01"
                       name="unit_cost"
-                      min="0"
-                      step="0.01"
-                      value={
-                        item.unit_cost
-                      }
-                      onChange={
-                        handleItemChange
-                      }
-                      placeholder="0.00"
+                      value={item.unit_cost}
+                      onChange={handleItemChange}
+                      disabled={isBusy}
                     />
-
                   </Form.Group>
-
                 </Col>
 
-                {/* DISCOUNT */}
-
                 <Col md={2}>
-
                   <Form.Group>
-
-                    <Form.Label>
-                      Discount %
-                    </Form.Label>
-
+                    <Form.Label>Discount (%)</Form.Label>
                     <Form.Control
                       type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
                       name="discount"
-                      min="0"
-                      max="100"
-                      step="0.01"
-                      value={
-                        item.discount
-                      }
-                      onChange={
-                        handleItemChange
-                      }
+                      value={item.discount}
+                      onChange={handleItemChange}
+                      disabled={isBusy}
                     />
-
                   </Form.Group>
-
                 </Col>
-
-                {/* TAX */}
-
-                <Col md={1}>
-
-                  <Form.Group>
-
-                    <Form.Label>
-                      Tax %
-                    </Form.Label>
-
-                    <Form.Control
-                      type="number"
-                      name="tax"
-                      min="0"
-                      max="100"
-                      step="0.01"
-                      value={
-                        item.tax
-                      }
-                      onChange={
-                        handleItemChange
-                      }
-                    />
-
-                  </Form.Group>
-
-                </Col>
-
-                {/* ADD BUTTON */}
 
                 <Col md={2}>
-
-                  <Button
-                    type="button"
-                    variant="primary"
-                    className="w-100"
-                    onClick={
-                      handleAddItem
-                    }
-                    disabled={
-                      saving ||
-                      parentSaving
-                    }
-                  >
-
-                    <i className="bi bi-plus-lg me-1" />
-
-                    Add Item
-
-                  </Button>
-
+                  <Form.Group>
+                    <Form.Label>Tax (%)</Form.Label>
+                    <Form.Control
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      name="tax"
+                      value={item.tax}
+                      onChange={handleItemChange}
+                      disabled={isBusy}
+                    />
+                  </Form.Group>
                 </Col>
 
-              </Row>
-
-              {/* CURRENT ITEM PREVIEW */}
-
-              {item.product &&
-                item.unit_cost !== "" && (
-                  <div className="mt-3 text-muted">
-
-                    <small>
-
-                      Gross:{" "}
-
-                      <strong>
-                        {formatCurrency(
-                          currentItemCalculation.gross
-                        )}
-                      </strong>
-
-                      {" | "}
-
-                      Discount:{" "}
-
-                      <strong>
-                        {formatCurrency(
-                          currentItemCalculation.discountAmount
-                        )}
-                      </strong>
-
-                      {" | "}
-
-                      Tax:{" "}
-
-                      <strong>
-                        {formatCurrency(
-                          currentItemCalculation.taxAmount
-                        )}
-                      </strong>
-
-                      {" | "}
-
-                      Total:{" "}
-
+                <Col md={12}>
+                  <div className="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <div>
+                      <small className="text-muted">
+                        Line total:{" "}
+                      </small>
                       <strong>
                         {formatCurrency(
                           currentItemCalculation.total
                         )}
                       </strong>
+                    </div>
 
-                    </small>
-
+                    <Button
+                      type="button"
+                      variant="outline-primary"
+                      onClick={handleAddItem}
+                      disabled={isBusy}
+                    >
+                      Add Product
+                    </Button>
                   </div>
-                )}
-
+                </Col>
+              </Row>
             </Card.Body>
-
           </Card>
-
-          {/* =================================================
-              ITEMS TABLE
-          ================================================= */}
 
           <Card>
+            <Card.Header>Purchase Items</Card.Header>
 
-            <Card.Body>
+            <Card.Body className="p-0">
+              <Table responsive hover className="mb-0">
+                <thead>
+                  <tr>
+                    <th>Product</th>
+                    <th className="text-end">Qty</th>
+                    <th className="text-end">Unit Cost</th>
+                    <th className="text-end">Discount</th>
+                    <th className="text-end">Tax</th>
+                    <th className="text-end">Total</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
 
-              <h6 className="mb-3">
-                Purchase Items
-              </h6>
-
-              {form.items.length ===
-              0 ? (
-
-                <div className="text-center text-muted py-4">
-
-                  <i className="bi bi-cart-x fs-2 d-block mb-2" />
-
-                  {isEditing
-                    ? "No products found for this purchase."
-                    : "No products added yet."}
-
-                </div>
-
-              ) : (
-
-                <div className="table-responsive">
-
-                  <Table
-                    bordered
-                    hover
-                    className="align-middle mb-0"
-                  >
-
-                    <thead>
-
-                      <tr>
-
-                        <th>
-                          Product
-                        </th>
-
-                        <th className="text-end">
-                          Qty
-                        </th>
-
-                        <th className="text-end">
-                          Unit Cost
-                        </th>
-
-                        <th className="text-end">
-                          Discount
-                        </th>
-
-                        <th className="text-end">
-                          Tax
-                        </th>
-
-                        <th className="text-end">
-                          Total
-                        </th>
-
-                        <th
-                          className="text-center"
-                          style={{
-                            width:
-                              "70px",
-                          }}
-                        >
-                          Action
-                        </th>
-
-                      </tr>
-
-                    </thead>
-
-                    <tbody>
-
-                      {form.items.map(
-                        (
-                          currentItem,
-                          index
-                        ) => (
-
-                          <tr
-                            key={
-                              currentItem.id ??
-                              `${currentItem.product}-${index}`
-                            }
+                <tbody>
+                  {form.items.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={7}
+                        className="text-center text-muted py-4"
+                      >
+                        No products added yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    form.items.map((entry, index) => (
+                      <tr key={`${entry.product}-${index}`}>
+                        <td>{entry.product_name}</td>
+                        <td className="text-end">
+                          {entry.quantity}
+                        </td>
+                        <td className="text-end">
+                          {formatCurrency(entry.unit_cost)}
+                        </td>
+                        <td className="text-end">
+                          {entry.discount}%
+                        </td>
+                        <td className="text-end">
+                          {entry.tax}%
+                        </td>
+                        <td className="text-end">
+                          {formatCurrency(entry.total)}
+                        </td>
+                        <td>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline-danger"
+                            onClick={() => handleRemoveItem(index)}
+                            disabled={isBusy}
                           >
-
-                            <td>
-
-                              <strong>
-                                {
-                                  currentItem.product_name
-                                }
-                              </strong>
-
-                            </td>
-
-                            <td className="text-end">
-                              {toNumber(
-                                currentItem.quantity
-                              )}
-                            </td>
-
-                            <td className="text-end">
-                              {formatCurrency(
-                                currentItem.unit_cost
-                              )}
-                            </td>
-
-                            <td className="text-end">
-
-                              {toNumber(
-                                currentItem.discount
-                              ).toFixed(2)}
-                              %
-
-                            </td>
-
-                            <td className="text-end">
-
-                              {toNumber(
-                                currentItem.tax
-                              ).toFixed(2)}
-                              %
-
-                            </td>
-
-                            <td className="text-end">
-
-                              <strong>
-                                {formatCurrency(
-                                  currentItem.total
-                                )}
-                              </strong>
-
-                            </td>
-
-                            <td className="text-center">
-
-                              <Button
-                                type="button"
-                                variant="outline-danger"
-                                size="sm"
-                                onClick={() =>
-                                  handleRemoveItem(
-                                    index
-                                  )
-                                }
-                                disabled={
-                                  saving ||
-                                  parentSaving
-                                }
-                                title="Remove item"
-                              >
-
-                                <i className="bi bi-trash" />
-
-                              </Button>
-
-                            </td>
-
-                          </tr>
-
-                        )
-                      )}
-
-                    </tbody>
-
-                  </Table>
-
-                </div>
-
-              )}
-
+                            Remove
+                          </Button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </Table>
             </Card.Body>
-
           </Card>
 
-          {/* =================================================
-              TOTALS
-          ================================================= */}
+          <Row className="mt-3">
+            <Col md={{ span: 5, offset: 7 }}>
+              <Card>
+                <Card.Body>
+                  <div className="d-flex justify-content-between mb-2">
+                    <span>Total quantity</span>
+                    <strong>{totals.quantity}</strong>
+                  </div>
 
-          {form.items.length >
-            0 && (
+                  <div className="d-flex justify-content-between mb-2">
+                    <span>Subtotal after discount</span>
+                    <strong>{formatCurrency(totals.subtotal)}</strong>
+                  </div>
 
-            <Row className="justify-content-end mt-4">
+                  <div className="d-flex justify-content-between mb-2">
+                    <span>Discount</span>
+                    <strong>{formatCurrency(totals.discount)}</strong>
+                  </div>
 
-              <Col md={5}>
+                  <div className="d-flex justify-content-between mb-2">
+                    <span>Tax</span>
+                    <strong>{formatCurrency(totals.tax)}</strong>
+                  </div>
 
-                <Card className="bg-light border-0">
+                  <hr />
 
-                  <Card.Body>
-
-                    <div className="d-flex justify-content-between mb-2">
-
-                      <span>
-                        Gross Subtotal
-                      </span>
-
-                      <strong>
-                        {formatCurrency(
-                          totals.gross
-                        )}
-                      </strong>
-
-                    </div>
-
-                    <div className="d-flex justify-content-between mb-2">
-
-                      <span>
-                        Discount
-                      </span>
-
-                      <strong>
-                        -{" "}
-                        {formatCurrency(
-                          totals.discount
-                        )}
-                      </strong>
-
-                    </div>
-
-                    <div className="d-flex justify-content-between mb-2">
-
-                      <span>
-                        Subtotal
-                      </span>
-
-                      <strong>
-                        {formatCurrency(
-                          totals.subtotal
-                        )}
-                      </strong>
-
-                    </div>
-
-                    <div className="d-flex justify-content-between mb-3">
-
-                      <span>
-                        Tax
-                      </span>
-
-                      <strong>
-                        {formatCurrency(
-                          totals.tax
-                        )}
-                      </strong>
-
-                    </div>
-
-                    <hr />
-
-                    <div className="d-flex justify-content-between">
-
-                      <h5 className="mb-0">
-                        Total
-                      </h5>
-
-                      <h5 className="mb-0">
-                        {formatCurrency(
-                          totals.total
-                        )}
-                      </h5>
-
-                    </div>
-
-                  </Card.Body>
-
-                </Card>
-
-              </Col>
-
-            </Row>
-
-          )}
-
+                  <div className="d-flex justify-content-between">
+                    <span className="fw-bold">Grand Total</span>
+                    <strong className="fs-5">
+                      {formatCurrency(totals.total)}
+                    </strong>
+                  </div>
+                </Card.Body>
+              </Card>
+            </Col>
+          </Row>
         </Modal.Body>
 
-        {/* ==================================================
-            FOOTER
-        ================================================== */}
-
         <Modal.Footer>
-
           <Button
             type="button"
             variant="secondary"
-            onClick={
-              handleClose
-            }
-            disabled={
-              saving ||
-              parentSaving
-            }
+            onClick={onHide}
+            disabled={isBusy}
           >
             Cancel
           </Button>
@@ -2257,42 +978,20 @@ const PurchaseModal = ({
             type="submit"
             variant="primary"
             disabled={
-              saving ||
-              parentSaving ||
-              form.items.length ===
-                0
+              isBusy ||
+              !form.items.length ||
+              !form.supplier ||
+              (!isEditing && !selectedBranchId)
             }
           >
-
-            {saving ||
-            parentSaving ? (
-              <>
-                <span
-                  className="spinner-border spinner-border-sm me-2"
-                  role="status"
-                  aria-hidden="true"
-                />
-
-                {isEditing
-                  ? "Updating..."
-                  : "Saving..."}
-              </>
-            ) : (
-              <>
-                <i className="bi bi-check-lg me-1" />
-
-                {isEditing
-                  ? "Update Purchase"
-                  : "Save Purchase"}
-              </>
-            )}
-
+            {isBusy
+              ? "Saving..."
+              : isEditing
+                ? "Update Purchase"
+                : "Create Purchase"}
           </Button>
-
         </Modal.Footer>
-
       </Form>
-
     </Modal>
   );
 };

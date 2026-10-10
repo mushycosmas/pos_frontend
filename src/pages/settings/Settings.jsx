@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 
 import SettingsSidebar from "./components/SettingsSidebar";
 import CompanySettings from "./components/CompanySettings";
+import BranchSettings from "./components/BranchSettings";
 import SystemSettings from "./components/SystemSettings";
 import PreferencesSettings from "./components/PreferencesSettings";
 
@@ -79,10 +80,13 @@ const Settings = () => {
       console.log(
         "================================="
       );
+
       console.log(
         "COMPANY API RESPONSE:"
       );
+
       console.log(data);
+
       console.log(
         "================================="
       );
@@ -140,7 +144,9 @@ const Settings = () => {
           companyData.logo
         );
 
-        setCompanyId(companyData.id);
+        setCompanyId(
+          companyData.id
+        );
 
         setCompany({
           ...DEFAULT_COMPANY,
@@ -177,7 +183,9 @@ const Settings = () => {
         typeof responseData === "object"
       ) {
         const messages =
-          Object.entries(responseData)
+          Object.entries(
+            responseData
+          )
             .map(
               ([field, message]) => {
                 if (
@@ -236,16 +244,10 @@ const Settings = () => {
   // =========================================================
   // HANDLE LOGO UPLOAD
   // =========================================================
-  //
-  // This function receives the actual File object from
-  // CompanyBasicInfo.jsx and sends it to Django.
-  //
-  // =========================================================
 
   const handleLogoUpload = async (
     logoFile
   ) => {
-
     console.log(
       "================================="
     );
@@ -285,7 +287,6 @@ const Settings = () => {
     // =======================================================
 
     if (!companyId) {
-
       setError(
         "Please save the company before uploading a logo."
       );
@@ -303,7 +304,6 @@ const Settings = () => {
         "image/"
       )
     ) {
-
       setError(
         "Please select a valid image file."
       );
@@ -322,7 +322,6 @@ const Settings = () => {
     if (
       logoFile.size > maxSize
     ) {
-
       setError(
         "Logo image must not exceed 5 MB."
       );
@@ -335,7 +334,6 @@ const Settings = () => {
     // =======================================================
 
     try {
-
       setSavingLogo(true);
 
       setError("");
@@ -395,12 +393,10 @@ const Settings = () => {
       // =====================================================
 
       if (response) {
-
         setCompany((prev) => ({
           ...prev,
           ...response,
         }));
-
       }
 
       // =====================================================
@@ -414,16 +410,10 @@ const Settings = () => {
       // =====================================================
       // RELOAD COMPANY FROM SERVER
       // =====================================================
-      //
-      // This makes sure we have the actual logo URL returned
-      // by Django.
-      //
-      // =====================================================
 
       await loadCompany();
 
     } catch (err) {
-
       console.error(
         "================================="
       );
@@ -451,33 +441,23 @@ const Settings = () => {
       const responseData =
         err?.response?.data;
 
-      // =====================================================
-      // DJANGO VALIDATION ERROR
-      // =====================================================
-
       if (
         responseData &&
         typeof responseData ===
           "object"
       ) {
-
         const messages =
           Object.entries(
             responseData
           )
             .map(
               ([field, message]) => {
-
                 if (
-                  Array.isArray(
-                    message
-                  )
+                  Array.isArray(message)
                 ) {
-
                   return `${field}: ${message.join(
                     ", "
                   )}`;
-
                 }
 
                 return `${field}: ${message}`;
@@ -489,27 +469,16 @@ const Settings = () => {
           messages ||
             "Failed to upload company logo."
         );
-
-      }
-
-      // =====================================================
-      // NORMAL ERROR
-      // =====================================================
-
-      else {
-
+      } else {
         setError(
           responseData ||
             err?.message ||
             "Failed to upload company logo."
         );
-
       }
 
     } finally {
-
       setSavingLogo(false);
-
     }
   };
 
@@ -518,11 +487,9 @@ const Settings = () => {
   // =========================================================
 
   const handleSubmit = async (e) => {
-
     e.preventDefault();
 
     try {
-
       setSaving(true);
 
       setError("");
@@ -536,7 +503,6 @@ const Settings = () => {
       // =====================================================
 
       if (companyId) {
-
         console.log(
           "Updating company:",
           companyId
@@ -547,7 +513,6 @@ const Settings = () => {
             companyId,
             company
           );
-
       }
 
       // =====================================================
@@ -555,7 +520,6 @@ const Settings = () => {
       // =====================================================
 
       else {
-
         console.log(
           "Creating company..."
         );
@@ -566,13 +530,10 @@ const Settings = () => {
           );
 
         if (response?.id) {
-
           setCompanyId(
             response.id
           );
-
         }
-
       }
 
       // =====================================================
@@ -580,12 +541,10 @@ const Settings = () => {
       // =====================================================
 
       if (response) {
-
         setCompany((prev) => ({
           ...prev,
           ...response,
         }));
-
       }
 
       // =====================================================
@@ -601,7 +560,6 @@ const Settings = () => {
       }, 4000);
 
     } catch (err) {
-
       console.error(
         "Failed to save company:",
         err
@@ -620,24 +578,18 @@ const Settings = () => {
         typeof responseData ===
           "object"
       ) {
-
         const messages =
           Object.entries(
             responseData
           )
             .map(
               ([field, message]) => {
-
                 if (
-                  Array.isArray(
-                    message
-                  )
+                  Array.isArray(message)
                 ) {
-
                   return `${field}: ${message.join(
                     ", "
                   )}`;
-
                 }
 
                 return `${field}: ${message}`;
@@ -649,21 +601,16 @@ const Settings = () => {
           messages ||
             "Failed to save company information."
         );
-
       } else {
-
         setError(
           responseData ||
             err?.message ||
             "Failed to save company information."
         );
-
       }
 
     } finally {
-
       setSaving(false);
-
     }
   };
 
@@ -672,9 +619,7 @@ const Settings = () => {
   // =========================================================
 
   const handleCancel = () => {
-
     loadCompany();
-
   };
 
   // =========================================================
@@ -682,7 +627,6 @@ const Settings = () => {
   // =========================================================
 
   const renderContent = () => {
-
     switch (activeTab) {
 
       // =====================================================
@@ -690,39 +634,30 @@ const Settings = () => {
       // =====================================================
 
       case "company":
-
         return (
           <CompanySettings
             company={company}
-
-            handleChange={
-              handleChange
-            }
-
+            handleChange={handleChange}
             handleLogoUpload={
               handleLogoUpload
             }
-
-            handleSubmit={
-              handleSubmit
-            }
-
-            handleCancel={
-              handleCancel
-            }
-
+            handleSubmit={handleSubmit}
+            handleCancel={handleCancel}
             loading={loading}
-
             saving={saving}
-
-            savingLogo={
-              savingLogo
-            }
-
+            savingLogo={savingLogo}
             error={error}
-
             success={success}
           />
+        );
+
+      // =====================================================
+      // BRANCHES
+      // =====================================================
+
+      case "branches":
+        return (
+          <BranchSettings />
         );
 
       // =====================================================
@@ -730,7 +665,6 @@ const Settings = () => {
       // =====================================================
 
       case "system":
-
         return (
           <SystemSettings />
         );
@@ -740,7 +674,6 @@ const Settings = () => {
       // =====================================================
 
       case "preferences":
-
         return (
           <PreferencesSettings />
         );
@@ -750,8 +683,22 @@ const Settings = () => {
       // =====================================================
 
       default:
-
-        return null;
+        return (
+          <CompanySettings
+            company={company}
+            handleChange={handleChange}
+            handleLogoUpload={
+              handleLogoUpload
+            }
+            handleSubmit={handleSubmit}
+            handleCancel={handleCancel}
+            loading={loading}
+            saving={saving}
+            savingLogo={savingLogo}
+            error={error}
+            success={success}
+          />
+        );
     }
   };
 
@@ -767,9 +714,7 @@ const Settings = () => {
       ====================================================== */}
 
       <div className="page-header mb-4">
-
         <div>
-
           <h2 className="mb-1">
             Settings
           </h2>
@@ -778,9 +723,7 @@ const Settings = () => {
             Configure your POS system and company
             information.
           </p>
-
         </div>
-
       </div>
 
       {/* =====================================================
@@ -796,12 +739,8 @@ const Settings = () => {
           ================================================== */}
 
           <SettingsSidebar
-            activeTab={
-              activeTab
-            }
-            setActiveTab={
-              setActiveTab
-            }
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
           />
 
           {/* =================================================
@@ -811,9 +750,7 @@ const Settings = () => {
           <div className="col-md-9">
 
             <div className="p-4">
-
               {renderContent()}
-
             </div>
 
           </div>

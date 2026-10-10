@@ -1,4 +1,3 @@
-
 import React, {
   createContext,
   useContext,
@@ -19,12 +18,81 @@ const AuthContext = createContext(null);
 
 
 // ============================================================
+// STORAGE KEY
+// ============================================================
+
+const CURRENT_BRANCH_KEY = "current_branch";
+
+
+// ============================================================
+// BRANCH STORAGE HELPERS
+// ============================================================
+
+const getStoredBranch = () => {
+
+  try {
+
+    const stored =
+      localStorage.getItem(
+        CURRENT_BRANCH_KEY
+      );
+
+    if (!stored) {
+      return null;
+    }
+
+    return JSON.parse(stored);
+
+  } catch (error) {
+
+    console.error(
+      "Failed to read stored branch:",
+      error
+    );
+
+    localStorage.removeItem(
+      CURRENT_BRANCH_KEY
+    );
+
+    return null;
+  }
+};
+
+
+const saveBranch = (branch) => {
+
+  if (!branch) {
+
+    localStorage.removeItem(
+      CURRENT_BRANCH_KEY
+    );
+
+    return;
+  }
+
+  localStorage.setItem(
+    CURRENT_BRANCH_KEY,
+    JSON.stringify(branch)
+  );
+};
+
+
+const clearStoredBranch = () => {
+
+  localStorage.removeItem(
+    CURRENT_BRANCH_KEY
+  );
+};
+
+
+// ============================================================
 // AUTH PROVIDER
 // ============================================================
 
 export const AuthProvider = ({ children }) => {
 
   const navigate = useNavigate();
+
 
   // ==========================================================
   // AUTH STATE
@@ -38,7 +106,229 @@ export const AuthProvider = ({ children }) => {
     () => authApi.getAccessToken()
   );
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(
+    true
+  );
+
+
+  // ==========================================================
+  // CURRENT BRANCH
+  // ==========================================================
+
+  const [currentBranch, setCurrentBranchState] = useState(
+    () => getStoredBranch()
+  );
+
+
+  // ==========================================================
+  // AVAILABLE BRANCHES
+  // ==========================================================
+
+  const [branches, setBranches] = useState(
+    []
+  );
+
+
+  // ==========================================================
+  // SET CURRENT BRANCH
+  // ==========================================================
+
+  const setCurrentBranch = (branch) => {
+
+    if (!branch) {
+
+      clearStoredBranch();
+
+      setCurrentBranchState(null);
+
+      return;
+    }
+
+    setCurrentBranchState(
+      branch
+    );
+
+    saveBranch(
+      branch
+    );
+  };
+
+
+  // ==========================================================
+  // INITIALIZE DEFAULT BRANCH
+  // ==========================================================
+
+  const initializeBranch = (loggedInUser) => {
+
+    if (!loggedInUser) {
+
+      setBranches([]);
+
+      setCurrentBranchState(null);
+
+      clearStoredBranch();
+
+      return;
+    }
+
+
+    // --------------------------------------------------------
+    // Get branches from user
+    // --------------------------------------------------------
+
+    let userBranches =
+      Array.isArray(
+        loggedInUser.branches
+      )
+        ? loggedInUser.branches
+        : [];
+
+
+    // --------------------------------------------------------
+    // Backward compatibility
+    //
+    // Current backend currently returns:
+    //
+    // branch
+    // branch_name
+    //
+    // So create a temporary branch object from it.
+    // --------------------------------------------------------
+
+    if (
+      userBranches.length === 0 &&
+      loggedInUser.branch
+    ) {
+
+      userBranches = [
+        {
+          id: loggedInUser.branch,
+          name:
+            loggedInUser.branch_name ||
+            "Main Branch",
+
+          code:
+            loggedInUser.branch_code ||
+            "MAIN",
+
+          is_main:
+            loggedInUser.branch_is_main ??
+            true,
+
+          is_active: true,
+        },
+      ];
+    }
+
+
+    // --------------------------------------------------------
+    // Save available branches
+    // --------------------------------------------------------
+
+    setBranches(
+      userBranches
+    );
+
+
+    // --------------------------------------------------------
+    // Existing selected branch
+    // --------------------------------------------------------
+
+    const storedBranch =
+      getStoredBranch();
+
+
+    // --------------------------------------------------------
+    // Check if stored branch is still available
+    // --------------------------------------------------------
+
+    if (storedBranch) {
+
+      const validStoredBranch =
+        userBranches.find(
+          (branch) =>
+            Number(branch.id) ===
+            Number(storedBranch.id)
+        );
+
+
+      if (validStoredBranch) {
+
+        setCurrentBranchState(
+          validStoredBranch
+        );
+
+        return;
+      }
+    }
+
+
+    // --------------------------------------------------------
+    // Find user's default branch
+    // --------------------------------------------------------
+
+    const defaultBranch =
+      userBranches.find(
+        (branch) =>
+          branch.is_default === true
+      );
+
+
+    if (defaultBranch) {
+
+      setCurrentBranch(
+        defaultBranch
+      );
+
+      return;
+    }
+
+
+    // --------------------------------------------------------
+    // Find Main Branch
+    // --------------------------------------------------------
+
+    const mainBranch =
+      userBranches.find(
+        (branch) =>
+          branch.is_main === true
+      );
+
+
+    if (mainBranch) {
+
+      setCurrentBranch(
+        mainBranch
+      );
+
+      return;
+    }
+
+
+    // --------------------------------------------------------
+    // First available branch
+    // --------------------------------------------------------
+
+    if (userBranches.length > 0) {
+
+      setCurrentBranch(
+        userBranches[0]
+      );
+
+      return;
+    }
+
+
+    // --------------------------------------------------------
+    // No branch available
+    // --------------------------------------------------------
+
+    clearStoredBranch();
+
+    setCurrentBranchState(
+      null
+    );
+  };
 
 
   // ==========================================================
@@ -59,13 +349,20 @@ export const AuthProvider = ({ children }) => {
 
 
         // ----------------------------------------------------
-        // No token = not authenticated
+        // No token
         // ----------------------------------------------------
 
         if (!token) {
 
           setUser(null);
+
           setAccessToken(null);
+
+          setBranches([]);
+
+          setCurrentBranchState(null);
+
+          clearStoredBranch();
 
           return;
         }
@@ -75,21 +372,29 @@ export const AuthProvider = ({ children }) => {
         // Token exists
         // ----------------------------------------------------
 
-        setAccessToken(token);
+        setAccessToken(
+          token
+        );
 
 
         // ----------------------------------------------------
-        // Load stored user immediately
+        // Load stored user
         // ----------------------------------------------------
 
         if (storedUser) {
 
-          setUser(storedUser);
+          setUser(
+            storedUser
+          );
+
+          initializeBranch(
+            storedUser
+          );
         }
 
 
         // ----------------------------------------------------
-        // Verify and refresh current user
+        // Verify current user
         // ----------------------------------------------------
 
         try {
@@ -99,7 +404,13 @@ export const AuthProvider = ({ children }) => {
 
           if (currentUser) {
 
-            setUser(currentUser);
+            setUser(
+              currentUser
+            );
+
+            initializeBranch(
+              currentUser
+            );
           }
 
         } catch (error) {
@@ -109,12 +420,6 @@ export const AuthProvider = ({ children }) => {
             error
           );
 
-          /*
-           * We don't immediately logout here.
-           *
-           * The API interceptor can handle expired
-           * access tokens using the refresh token.
-           */
         }
 
       } catch (error) {
@@ -125,7 +430,14 @@ export const AuthProvider = ({ children }) => {
         );
 
         setUser(null);
+
         setAccessToken(null);
+
+        setBranches([]);
+
+        setCurrentBranchState(null);
+
+        clearStoredBranch();
 
       } finally {
 
@@ -158,7 +470,7 @@ export const AuthProvider = ({ children }) => {
 
 
       // ------------------------------------------------------
-      // Get stored authentication data
+      // Get authentication data
       // ------------------------------------------------------
 
       const token =
@@ -169,11 +481,25 @@ export const AuthProvider = ({ children }) => {
 
 
       // ------------------------------------------------------
-      // Update React state
+      // Update state
       // ------------------------------------------------------
 
-      setAccessToken(token);
-      setUser(loggedInUser);
+      setAccessToken(
+        token
+      );
+
+      setUser(
+        loggedInUser
+      );
+
+
+      // ------------------------------------------------------
+      // Initialize branch
+      // ------------------------------------------------------
+
+      initializeBranch(
+        loggedInUser
+      );
 
 
       return {
@@ -194,17 +520,23 @@ export const AuthProvider = ({ children }) => {
         "Login failed. Please try again.";
 
 
-      if (error.response?.data?.detail) {
+      if (
+        error.response?.data?.detail
+      ) {
 
         message =
           error.response.data.detail;
 
-      } else if (error.response?.data?.message) {
+      } else if (
+        error.response?.data?.message
+      ) {
 
         message =
           error.response.data.message;
 
-      } else if (error.message) {
+      } else if (
+        error.message
+      ) {
 
         message =
           error.message;
@@ -239,15 +571,34 @@ export const AuthProvider = ({ children }) => {
     } finally {
 
       // ------------------------------------------------------
-      // Always clear React state
+      // Clear authentication
       // ------------------------------------------------------
 
       setUser(null);
+
       setAccessToken(null);
 
 
       // ------------------------------------------------------
-      // Redirect to login
+      // Clear branches
+      // ------------------------------------------------------
+
+      setBranches([]);
+
+
+      // ------------------------------------------------------
+      // Clear current branch
+      // ------------------------------------------------------
+
+      setCurrentBranchState(
+        null
+      );
+
+      clearStoredBranch();
+
+
+      // ------------------------------------------------------
+      // Redirect
       // ------------------------------------------------------
 
       navigate(
@@ -276,15 +627,14 @@ export const AuthProvider = ({ children }) => {
         authApi.getAccessToken();
 
 
-      setAccessToken(token);
+      setAccessToken(
+        token
+      );
 
 
-      /*
-       * Refresh current user as well.
-       *
-       * This is useful because permissions can be
-       * changed by an administrator.
-       */
+      // ------------------------------------------------------
+      // Refresh current user
+      // ------------------------------------------------------
 
       try {
 
@@ -293,7 +643,13 @@ export const AuthProvider = ({ children }) => {
 
         if (currentUser) {
 
-          setUser(currentUser);
+          setUser(
+            currentUser
+          );
+
+          initializeBranch(
+            currentUser
+          );
         }
 
       } catch (userError) {
@@ -318,14 +674,18 @@ export const AuthProvider = ({ children }) => {
       );
 
 
-      // ------------------------------------------------------
-      // Refresh failed = authentication expired
-      // ------------------------------------------------------
-
       authApi.clearStorage();
 
+      clearStoredBranch();
+
+
       setUser(null);
+
       setAccessToken(null);
+
+      setBranches([]);
+
+      setCurrentBranchState(null);
 
 
       return {
@@ -351,7 +711,14 @@ export const AuthProvider = ({ children }) => {
         await authApi.getCurrentUser();
 
 
-      setUser(currentUser);
+      setUser(
+        currentUser
+      );
+
+
+      initializeBranch(
+        currentUser
+      );
 
 
       return {
@@ -415,12 +782,108 @@ export const AuthProvider = ({ children }) => {
 
 
   // ==========================================================
-  // GET BRANCH
+  // GET CURRENT BRANCH
   // ==========================================================
 
   const getBranch = () => {
 
-    return user?.branch || null;
+    return currentBranch;
+  };
+
+
+  // ==========================================================
+  // GET BRANCH ID
+  // ==========================================================
+
+  const getBranchId = () => {
+
+    return currentBranch?.id || null;
+  };
+
+
+  // ==========================================================
+  // CHECK CURRENT BRANCH
+  // ==========================================================
+
+  const isCurrentBranch = (branchId) => {
+
+    if (!currentBranch) {
+      return false;
+    }
+
+    return (
+      Number(currentBranch.id) ===
+      Number(branchId)
+    );
+  };
+
+
+  // ==========================================================
+  // SWITCH BRANCH
+  // ==========================================================
+
+  const switchBranch = (branch) => {
+
+    if (!branch) {
+
+      return {
+        success: false,
+        error: "Branch is required.",
+      };
+    }
+
+
+    // --------------------------------------------------------
+    // Check branch exists in user's available branches
+    // --------------------------------------------------------
+
+    const allowedBranch =
+      branches.find(
+        (item) =>
+          Number(item.id) ===
+          Number(branch.id)
+      );
+
+
+    if (!allowedBranch) {
+
+      return {
+        success: false,
+        error:
+          "You are not allowed to access this branch.",
+      };
+    }
+
+
+    // --------------------------------------------------------
+    // Check active
+    // --------------------------------------------------------
+
+    if (
+      allowedBranch.is_active === false
+    ) {
+
+      return {
+        success: false,
+        error:
+          "This branch is currently inactive.",
+      };
+    }
+
+
+    // --------------------------------------------------------
+    // Change branch
+    // --------------------------------------------------------
+
+    setCurrentBranch(
+      allowedBranch
+    );
+
+
+    return {
+      success: true,
+      branch: allowedBranch,
+    };
   };
 
 
@@ -444,27 +907,26 @@ export const AuthProvider = ({ children }) => {
 
   const hasPermission = (permission) => {
 
-    if (!user || !permission) {
+    if (
+      !user ||
+      !permission
+    ) {
+
       return false;
     }
 
 
-    // --------------------------------------------------------
-    // Superuser has all permissions
-    // --------------------------------------------------------
-
     if (user.is_superuser) {
+
       return true;
     }
 
 
-    // --------------------------------------------------------
-    // Check permission
-    // --------------------------------------------------------
-
     return (
       Array.isArray(user.permissions) &&
-      user.permissions.includes(permission)
+      user.permissions.includes(
+        permission
+      )
     );
   };
 
@@ -473,33 +935,40 @@ export const AuthProvider = ({ children }) => {
   // CHECK ANY PERMISSION
   // ==========================================================
 
-  const hasAnyPermission = (permissions = []) => {
+  const hasAnyPermission = (
+    permissions = []
+  ) => {
 
     if (
       !user ||
       !Array.isArray(permissions)
     ) {
+
       return false;
     }
 
 
-    // --------------------------------------------------------
-    // Superuser has all permissions
-    // --------------------------------------------------------
-
     if (user.is_superuser) {
+
       return true;
     }
 
 
-    if (!Array.isArray(user.permissions)) {
+    if (
+      !Array.isArray(
+        user.permissions
+      )
+    ) {
+
       return false;
     }
 
 
     return permissions.some(
       (permission) =>
-        user.permissions.includes(permission)
+        user.permissions.includes(
+          permission
+        )
     );
   };
 
@@ -508,33 +977,40 @@ export const AuthProvider = ({ children }) => {
   // CHECK ALL PERMISSIONS
   // ==========================================================
 
-  const hasAllPermissions = (permissions = []) => {
+  const hasAllPermissions = (
+    permissions = []
+  ) => {
 
     if (
       !user ||
       !Array.isArray(permissions)
     ) {
+
       return false;
     }
 
 
-    // --------------------------------------------------------
-    // Superuser has all permissions
-    // --------------------------------------------------------
-
     if (user.is_superuser) {
+
       return true;
     }
 
 
-    if (!Array.isArray(user.permissions)) {
+    if (
+      !Array.isArray(
+        user.permissions
+      )
+    ) {
+
       return false;
     }
 
 
     return permissions.every(
       (permission) =>
-        user.permissions.includes(permission)
+        user.permissions.includes(
+          permission
+        )
     );
   };
 
@@ -606,7 +1082,19 @@ export const AuthProvider = ({ children }) => {
     // Branch
     // --------------------------------------------------------
 
+    branches,
+
+    currentBranch,
+
+    setCurrentBranch,
+
+    switchBranch,
+
     getBranch,
+
+    getBranchId,
+
+    isCurrentBranch,
 
 
     // --------------------------------------------------------
@@ -625,7 +1113,9 @@ export const AuthProvider = ({ children }) => {
 
 
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider
+      value={value}
+    >
       {children}
     </AuthContext.Provider>
   );
@@ -655,4 +1145,3 @@ export const useAuth = () => {
 
 
 export default AuthContext;
-

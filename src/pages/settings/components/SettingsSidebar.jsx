@@ -1,11 +1,20 @@
 import React from "react";
+import { useBranch } from "../../../context/BranchContext";
 
 const SettingsSidebar = ({ activeTab, setActiveTab }) => {
+  const { activeBranches } = useBranch();
+
   const tabs = [
     {
       key: "company",
       label: "Company",
       icon: "bi-building",
+    },
+    {
+      key: "branches",
+      label: "Branches",
+      icon: "bi-diagram-3",
+      badge: activeBranches?.length || 0,
     },
     {
       key: "system",
@@ -37,7 +46,20 @@ const SettingsSidebar = ({ activeTab, setActiveTab }) => {
               onClick={() => setActiveTab(tab.key)}
             >
               <i className={`bi ${tab.icon} me-2`}></i>
+
               {tab.label}
+
+              {tab.badge > 0 && (
+                <span
+                  className={`badge rounded-pill float-end ${
+                    activeTab === tab.key
+                      ? "bg-light text-primary"
+                      : "bg-primary"
+                  }`}
+                >
+                  {tab.badge}
+                </span>
+              )}
             </button>
           ))}
         </div>

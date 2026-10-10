@@ -5,52 +5,64 @@ import {
   Navigate,
 } from "react-router-dom";
 
-// ===============================
-// AUTH
-// ===============================
-import Login from "../pages/Login";
+// ============================================================
+// PUBLIC HOME
+// ============================================================
+import Home from "../pages/Home";
 
-// ===============================
+// ============================================================
+// AUTH
+// ============================================================
+import Login from "../pages/Login";
+import CompanyRegistration from "../pages/auth/CompanyRegistration";
+import ResetPassword from "../pages/auth/ResetPassword";
+
+// ============================================================
 // MAIN PAGES
-// ===============================
+// ============================================================
 import Dashboard from "../pages/Dashboard";
 import POS from "../pages/POS";
-import Sales from "../pages/Sales";
-import Customers from "../pages/Customers";
+import Sales from "../pages/sales/Sales";
+import Customers from "../pages/customers/Customers";
 import Reports from "../pages/Reports";
 import Users from "../pages/Users";
 import Settings from "../pages/settings/Settings";
 import Brands from "../pages/Brands";
 
-// ===============================
+// ============================================================
+// SETTINGS PAGES
+// ============================================================
+import BranchSettings from "../pages/settings/components/BranchSettings";
+
+// ============================================================
 // INVENTORY PAGES
-// ===============================
-import Products from "../pages/Products";
+// ============================================================
+import Products from "../pages/products/Products";
 import Inventory from "../pages/Inventory";
 import Categories from "../pages/Categories";
-import Purchases from "../pages/Purchases";
+import Purchases from "../pages/purchases/Purchases";
 import Suppliers from "../pages/Suppliers";
 import StockAdjustments from "../pages/StockAdjustments";
 import Return from "../pages/Return";
 
-// ===============================
+// ============================================================
 // EXPENSES
-// ===============================
-import Expenses from "../pages/Expenses";
+// ============================================================
+import Expenses from "../pages/expenses/Expenses";
 
-// ===============================
+// ============================================================
 // PAYMENT METHODS
-// ===============================
+// ============================================================
 import PaymentMethod from "../pages/PaymentMethod";
 
-// ===============================
+// ============================================================
 // ROLES & PERMISSIONS
-// ===============================
+// ============================================================
 import Roles from "../pages/Roles";
 
-// ===============================
+// ============================================================
 // SERVICES
-// ===============================
+// ============================================================
 import authApi from "../services/auth";
 
 // ============================================================
@@ -73,7 +85,13 @@ const ProtectedRoute = ({ children }) => {
 };
 
 // ============================================================
-// PUBLIC ROUTE
+// PUBLIC AUTH ROUTE
+// ============================================================
+// Used for pages that should not be accessed while logged in,
+// such as Login and Registration.
+//
+// Home is NOT wrapped with this component because the Home page
+// should remain accessible to everyone.
 // ============================================================
 
 const PublicRoute = ({ children }) => {
@@ -92,6 +110,80 @@ const PublicRoute = ({ children }) => {
 };
 
 // ============================================================
+// 404 PAGE
+// ============================================================
+
+const NotFound = () => {
+  const isAuthenticated = authApi.isAuthenticated();
+
+  return (
+    <div
+      className="d-flex align-items-center justify-content-center text-center"
+      style={{
+        minHeight: "100vh",
+        backgroundColor: "#f8f9fa",
+        padding: "30px",
+      }}
+    >
+      <div>
+
+        {/* ICON */}
+        <div className="mb-4">
+          <i
+            className="bi bi-exclamation-circle text-primary"
+            style={{
+              fontSize: "70px",
+            }}
+          ></i>
+        </div>
+
+        {/* TITLE */}
+        <h2 className="fw-bold mb-3">
+          Page Not Found
+        </h2>
+
+        {/* DESCRIPTION */}
+        <p className="text-muted mb-4">
+          The page you are looking for does not exist.
+        </p>
+
+        {/* ACTIONS */}
+        <div className="d-flex justify-content-center gap-2">
+
+          {/* HOME */}
+          <button
+            type="button"
+            className="btn btn-primary px-4"
+            onClick={() => {
+              window.location.href = "/";
+            }}
+          >
+            <i className="bi bi-house-fill me-2"></i>
+            Home
+          </button>
+
+          {/* DASHBOARD */}
+          {isAuthenticated && (
+            <button
+              type="button"
+              className="btn btn-outline-primary px-4"
+              onClick={() => {
+                window.location.href = "/dashboard";
+              }}
+            >
+              <i className="bi bi-grid-1x2-fill me-2"></i>
+              Dashboard
+            </button>
+          )}
+
+        </div>
+
+      </div>
+    </div>
+  );
+};
+
+// ============================================================
 // APP ROUTES
 // ============================================================
 
@@ -99,9 +191,20 @@ const AppRoutes = () => {
   return (
     <Routes>
 
-      {/* =====================================================
-          LOGIN
-      ===================================================== */}
+      {/* ======================================================
+          HOME
+      ====================================================== */}
+
+      <Route
+        path="/"
+        element={<Home />}
+      />
+
+      {/* ======================================================
+          AUTHENTICATION
+      ====================================================== */}
+
+      {/* LOGIN */}
 
       <Route
         path="/login"
@@ -112,23 +215,31 @@ const AppRoutes = () => {
         }
       />
 
-      {/* =====================================================
-          DEFAULT ROUTE
-      ===================================================== */}
+      {/* COMPANY REGISTRATION */}
 
       <Route
-        path="/"
+        path="/register"
         element={
-          <Navigate
-            to="/dashboard"
-            replace
-          />
+          <PublicRoute>
+            <CompanyRegistration />
+          </PublicRoute>
         }
       />
 
-      {/* =====================================================
-          MAIN
-      ===================================================== */}
+      {/* RESET PASSWORD */}
+
+      <Route
+        path="/reset-password"
+        element={
+          <PublicRoute>
+            <ResetPassword />
+          </PublicRoute>
+        }
+      />
+
+      {/* ======================================================
+          DASHBOARD
+      ====================================================== */}
 
       <Route
         path="/dashboard"
@@ -139,6 +250,10 @@ const AppRoutes = () => {
         }
       />
 
+      {/* ======================================================
+          POS
+      ====================================================== */}
+
       <Route
         path="/pos"
         element={
@@ -147,6 +262,10 @@ const AppRoutes = () => {
           </ProtectedRoute>
         }
       />
+
+      {/* ======================================================
+          SALES
+      ====================================================== */}
 
       <Route
         path="/sales"
@@ -157,9 +276,11 @@ const AppRoutes = () => {
         }
       />
 
-      {/* =====================================================
+      {/* ======================================================
           INVENTORY
-      ===================================================== */}
+      ====================================================== */}
+
+      {/* PRODUCTS */}
 
       <Route
         path="/products"
@@ -170,6 +291,8 @@ const AppRoutes = () => {
         }
       />
 
+      {/* INVENTORY */}
+
       <Route
         path="/inventory"
         element={
@@ -178,6 +301,8 @@ const AppRoutes = () => {
           </ProtectedRoute>
         }
       />
+
+      {/* CATEGORIES */}
 
       <Route
         path="/categories"
@@ -188,6 +313,8 @@ const AppRoutes = () => {
         }
       />
 
+      {/* BRANDS */}
+
       <Route
         path="/brands"
         element={
@@ -196,6 +323,8 @@ const AppRoutes = () => {
           </ProtectedRoute>
         }
       />
+
+      {/* PURCHASES */}
 
       <Route
         path="/purchases"
@@ -206,6 +335,8 @@ const AppRoutes = () => {
         }
       />
 
+      {/* RETURNS */}
+
       <Route
         path="/returns"
         element={
@@ -214,6 +345,8 @@ const AppRoutes = () => {
           </ProtectedRoute>
         }
       />
+
+      {/* SUPPLIERS */}
 
       <Route
         path="/suppliers"
@@ -224,6 +357,8 @@ const AppRoutes = () => {
         }
       />
 
+      {/* STOCK ADJUSTMENTS */}
+
       <Route
         path="/stock-adjustments"
         element={
@@ -233,9 +368,11 @@ const AppRoutes = () => {
         }
       />
 
-      {/* =====================================================
+      {/* ======================================================
           MANAGEMENT
-      ===================================================== */}
+      ====================================================== */}
+
+      {/* CUSTOMERS */}
 
       <Route
         path="/customers"
@@ -246,48 +383,7 @@ const AppRoutes = () => {
         }
       />
 
-      {/* =====================================================
-          EXPENSES
-      ===================================================== */}
-
-      <Route
-        path="/expenses"
-        element={
-          <ProtectedRoute>
-            <Expenses />
-          </ProtectedRoute>
-        }
-      />
-
-      {/* =====================================================
-          PAYMENT METHODS
-      ===================================================== */}
-
-      <Route
-        path="/payment-methods"
-        element={
-          <ProtectedRoute>
-            <PaymentMethod />
-          </ProtectedRoute>
-        }
-      />
-
-      {/* =====================================================
-          REPORTS
-      ===================================================== */}
-
-      <Route
-        path="/reports"
-        element={
-          <ProtectedRoute>
-            <Reports />
-          </ProtectedRoute>
-        }
-      />
-
-      {/* =====================================================
-          SYSTEM
-      ===================================================== */}
+      {/* USERS */}
 
       <Route
         path="/users"
@@ -298,9 +394,48 @@ const AppRoutes = () => {
         }
       />
 
-      {/* =====================================================
+      {/* ======================================================
+          EXPENSES
+      ====================================================== */}
+
+      <Route
+        path="/expenses"
+        element={
+          <ProtectedRoute>
+            <Expenses />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* ======================================================
+          PAYMENT METHODS
+      ====================================================== */}
+
+      <Route
+        path="/payment-methods"
+        element={
+          <ProtectedRoute>
+            <PaymentMethod />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* ======================================================
+          REPORTS
+      ====================================================== */}
+
+      <Route
+        path="/reports"
+        element={
+          <ProtectedRoute>
+            <Reports />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* ======================================================
           ROLES & PERMISSIONS
-      ===================================================== */}
+      ====================================================== */}
 
       <Route
         path="/roles"
@@ -311,9 +446,9 @@ const AppRoutes = () => {
         }
       />
 
-      {/* =====================================================
+      {/* ======================================================
           SETTINGS
-      ===================================================== */}
+      ====================================================== */}
 
       <Route
         path="/settings"
@@ -324,44 +459,26 @@ const AppRoutes = () => {
         }
       />
 
-      {/* =====================================================
+      {/* ======================================================
+          BRANCH MANAGEMENT
+      ====================================================== */}
+
+      <Route
+        path="/settings/branches"
+        element={
+          <ProtectedRoute>
+            <BranchSettings />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* ======================================================
           404
-      ===================================================== */}
+      ====================================================== */}
 
       <Route
         path="*"
-        element={
-          <div className="text-center py-5">
-
-            <div className="mb-3">
-              <i
-                className="bi bi-exclamation-circle"
-                style={{
-                  fontSize: "50px",
-                }}
-              ></i>
-            </div>
-
-            <h3>Page Not Found</h3>
-
-            <p className="text-muted">
-              The page you are looking for
-              does not exist.
-            </p>
-
-            <button
-              className="primary-button"
-              onClick={() => {
-                window.location.href =
-                  "/dashboard";
-              }}
-            >
-              <i className="bi bi-grid-1x2-fill me-2"></i>
-              Back to Dashboard
-            </button>
-
-          </div>
-        }
+        element={<NotFound />}
       />
 
     </Routes>
