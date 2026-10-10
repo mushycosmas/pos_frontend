@@ -178,7 +178,7 @@ const HomeFooter = () => {
                 <i className="bi bi-envelope me-3 text-primary"></i>
 
                 <span>
-                  support@yourpos.com
+                  kevo93mushy@gmail.com
                 </span>
               </div>
 
@@ -186,7 +186,7 @@ const HomeFooter = () => {
                 <i className="bi bi-telephone me-3 text-primary"></i>
 
                 <span>
-                  +255 XXX XXX XXX
+                  +255 659 703 509
                 </span>
               </div>
 
