@@ -1,3 +1,4 @@
+
 import React, { useState } from "react";
 
 import {
@@ -21,7 +22,7 @@ export default function UserFormModal({
   onChange,
   onSubmit,
   saving,
-  branches,
+  branches = [],
   branchesLoading,
   currentBranchId,
   error,
@@ -34,30 +35,48 @@ export default function UserFormModal({
   );
 
   const handleSubmit = (event) => {
+    event.preventDefault();
+
+    // Build the complete payload without waiting for React state updates.
+    const payload = {
+      ...formData,
+      branch: currentBranchId,
+    };
+
+    // New users receive the default password.
+    // Editing users keep their existing password unchanged.
     if (!editingUser) {
-      // Use the default password when creating a new user.
-      onChange({
-        target: {
-          name: "password",
-          value: DEFAULT_PASSWORD,
-        },
-      });
+      payload.password = DEFAULT_PASSWORD;
+    } else {
+      delete payload.password;
     }
 
-    onSubmit(event);
+    // The parent handler must accept (event, payload).
+    onSubmit(event, payload);
   };
 
   return (
-    <Modal show={show} onHide={onHide} centered size="lg">
+    <Modal
+      show={show}
+      onHide={onHide}
+      centered
+      size="lg"
+      backdrop={saving ? "static" : true}
+      keyboard={!saving}
+    >
       <Form onSubmit={handleSubmit}>
-        <Modal.Header closeButton>
+        <Modal.Header closeButton={!saving}>
           <Modal.Title>
             {editingUser ? "Edit User" : "Add User"}
           </Modal.Title>
         </Modal.Header>
 
         <Modal.Body>
-          {error && <Alert variant="danger">{error}</Alert>}
+          {error && (
+            <Alert variant="danger" className="mb-3">
+              {error}
+            </Alert>
+          )}
 
           <Row className="g-3">
             {/* Username */}
@@ -65,10 +84,10 @@ export default function UserFormModal({
               <Form.Label>Username *</Form.Label>
               <Form.Control
                 name="username"
-                value={formData.username}
+                value={formData.username || ""}
                 onChange={onChange}
                 required
-                disabled={!!editingUser}
+                disabled={!!editingUser || saving}
                 autoComplete="off"
               />
             </Col>
@@ -90,6 +109,7 @@ export default function UserFormModal({
                   <Button
                     variant="outline-secondary"
                     type="button"
+                    disabled={saving}
                     onClick={() =>
                       setShowPassword((previous) => !previous)
                     }
@@ -111,8 +131,8 @@ export default function UserFormModal({
                 </InputGroup>
 
                 <Form.Text className="text-warning">
-                  The user must change this password after their first
-                  login.
+                  Default password: ChangeMe@123. Ask the user to change
+                  it after logging in.
                 </Form.Text>
               </Col>
             )}
@@ -122,8 +142,9 @@ export default function UserFormModal({
               <Form.Label>First Name</Form.Label>
               <Form.Control
                 name="first_name"
-                value={formData.first_name}
+                value={formData.first_name || ""}
                 onChange={onChange}
+                disabled={saving}
               />
             </Col>
 
@@ -132,8 +153,9 @@ export default function UserFormModal({
               <Form.Label>Last Name</Form.Label>
               <Form.Control
                 name="last_name"
-                value={formData.last_name}
+                value={formData.last_name || ""}
                 onChange={onChange}
+                disabled={saving}
               />
             </Col>
 
@@ -143,8 +165,9 @@ export default function UserFormModal({
               <Form.Control
                 type="email"
                 name="email"
-                value={formData.email}
+                value={formData.email || ""}
                 onChange={onChange}
+                disabled={saving}
               />
             </Col>
 
@@ -153,9 +176,10 @@ export default function UserFormModal({
               <Form.Label>Phone</Form.Label>
               <Form.Control
                 name="phone"
-                value={formData.phone}
+                value={formData.phone || ""}
                 onChange={onChange}
                 placeholder="2557XXXXXXXX"
+                disabled={saving}
               />
             </Col>
 
@@ -164,9 +188,10 @@ export default function UserFormModal({
               <Form.Label>Role *</Form.Label>
               <Form.Select
                 name="role"
-                value={formData.role}
+                value={formData.role || ""}
                 onChange={onChange}
                 required
+                disabled={saving}
               >
                 <option value="">Select role</option>
 
@@ -206,8 +231,9 @@ export default function UserFormModal({
                 name="is_active"
                 id="user-active"
                 label="User is active"
-                checked={formData.is_active}
+                checked={Boolean(formData.is_active)}
                 onChange={onChange}
+                disabled={saving}
               />
             </Col>
           </Row>
@@ -216,6 +242,7 @@ export default function UserFormModal({
         <Modal.Footer>
           <Button
             variant="secondary"
+            type="button"
             onClick={onHide}
             disabled={saving}
           >

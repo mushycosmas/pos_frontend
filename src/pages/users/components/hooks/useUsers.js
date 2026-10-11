@@ -1,9 +1,11 @@
-// src/pages/users/hooks/useUsers.js
 
 import { useCallback, useEffect, useState } from "react";
+
 import userApi from "../../../../services/User";
 import branchesApi from "../../../../services/branchesApi";
 import { useBranch } from "../../../../context/BranchContext";
+
+const DEFAULT_PASSWORD = "ChangeMe@123";
 
 const emptyForm = {
   username: "",
@@ -22,17 +24,19 @@ const getErrorMessage = (err) => {
 
   if (data && typeof data === "object") {
     return Object.entries(data)
-      .map(([field, messages]) =>
-        `${field}: ${
-          Array.isArray(messages)
-            ? messages.join(", ")
-            : String(messages)
-        }`
-      )
+      .map(([field, messages]) => {
+        const message = Array.isArray(messages)
+          ? messages.join(", ")
+          : typeof messages === "object" && messages !== null
+            ? JSON.stringify(messages)
+            : String(messages);
+
+        return `${field}: ${message}`;
+      })
       .join(" | ");
   }
 
-  return "An unexpected error occurred.";
+  return err?.message || "An unexpected error occurred.";
 };
 
 const getBranchId = (user) => {
@@ -55,6 +59,7 @@ export default function useUsers() {
 
   const [users, setUsers] = useState([]);
   const [branches, setBranches] = useState([]);
+
   const [loading, setLoading] = useState(false);
   const [branchesLoading, setBranchesLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -66,28 +71,35 @@ export default function useUsers() {
 
   const [page, setPage] = useState(1);
   const pageSize = 20;
+
   const [totalPages, setTotalPages] = useState(1);
   const [totalUsers, setTotalUsers] = useState(0);
 
   const [showModal, setShowModal] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
+
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletingUser, setDeletingUser] = useState(null);
 
   const [formData, setFormData] = useState(emptyForm);
+
+  // --------------------------------------------------
+  // LOAD BRANCHES
+  // --------------------------------------------------
 
   const loadBranches = useCallback(async () => {
     try {
       setBranchesLoading(true);
 
       const data = await branchesApi.getAll({ page_size: 1000 });
-      setBranches(
-        Array.isArray(data?.results)
-          ? data.results
-          : Array.isArray(data)
-            ? data
-            : []
-      );
+
+      const results = Array.isArray(data?.results)
+        ? data.results
+        : Array.isArray(data)
+          ? data
+          : [];
+
+      setBranches(results);
     } catch (err) {
       setError(getErrorMessage(err));
       setBranches([]);
@@ -95,6 +107,10 @@ export default function useUsers() {
       setBranchesLoading(false);
     }
   }, []);
+
+  // --------------------------------------------------
+  // LOAD USERS FOR CURRENT BRANCH
+  // --------------------------------------------------
 
   const loadUsers = useCallback(async () => {
     if (!currentBranchId) {
@@ -115,27 +131,38 @@ export default function useUsers() {
         branch: currentBranchId,
       };
 
-      if (search.trim()) params.search = search.trim();
-      if (roleFilter) params.role = roleFilter;
-      if (statusFilter !== "") params.is_active = statusFilter;
+      if (search.trim()) {
+        params.search = search.trim();
+      }
+
+      if (roleFilter) {
+        params.role = roleFilter;
+      }
+
+      if (statusFilter !== "") {
+        params.is_active = statusFilter;
+      }
 
       const data = await userApi.getAll(params);
+
       const results = Array.isArray(data?.results)
         ? data.results
         : Array.isArray(data)
           ? data
           : [];
 
-      // Client-side branch guard in addition to the API branch scope.
+      // Only display users belonging to the selected branch.
       const branchUsers = results.filter(
-        (user) => String(getBranchId(user)) === String(currentBranchId)
+        (user) =>
+          String(getBranchId(user)) === String(currentBranchId)
       );
 
       setUsers(branchUsers);
 
-      // Use server pagination metadata when available.
       const count = data?.count ?? branchUsers.length;
+
       setTotalUsers(count);
+
       setTotalPages(
         Array.isArray(data?.results)
           ? Math.max(1, Math.ceil(count / pageSize))
@@ -149,7 +176,13 @@ export default function useUsers() {
     } finally {
       setLoading(false);
     }
-  }, [currentBranchId, page, roleFilter, search, statusFilter]);
+  }, [
+    currentBranchId,
+    page,
+    roleFilter,
+    search,
+    statusFilter,
+  ]);
 
   useEffect(() => {
     loadBranches();
@@ -159,19 +192,25 @@ export default function useUsers() {
     loadUsers();
   }, [loadUsers]);
 
+  // --------------------------------------------------
+  // FORM HANDLING
+  // --------------------------------------------------
+
   const handleChange = (event) => {
     const { name, value, type, checked } = event.target;
 
-    setFormData((prev) => ({
-      ...prev,
+    setFormData((previous) => ({
+      ...previous,
       [name]: type === "checkbox" ? checked : value,
     }));
   };
 
-  const resetForm = () => setFormData({
-    ...emptyForm,
-    branch: currentBranchId ? String(currentBranchId) : "",
-  });
+  const resetForm = () => {
+    setFormData({
+      ...emptyForm,
+      branch: currentBranchId ? String(currentBranchId) : "",
+    });
+  };
 
   const openAdd = () => {
     setEditingUser(null);
@@ -182,6 +221,7 @@ export default function useUsers() {
 
   const openEdit = (user) => {
     setEditingUser(user);
+
     setFormData({
       username: user.username || "",
       password: "",
@@ -191,30 +231,57 @@ export default function useUsers() {
       phone: user.phone || "",
       role: String(
         user.role_id ??
-        (typeof user.role === "object" ? user.role?.id : user.role) ??
-        ""
+          (typeof user.role === "object" ? user.role?.id : user.role) ??
+          ""
       ),
       branch: String(getBranchId(user) ?? currentBranchId ?? ""),
       is_active: user.is_active ?? true,
     });
+
     setError("");
     setShowModal(true);
   };
 
-  const submitUser = async (event) => {
-    event.preventDefault();
+  // --------------------------------------------------
+  // CREATE / UPDATE USER
+  // --------------------------------------------------
+
+  const submitUser = async (event, submittedData) => {
+    event?.preventDefault?.();
+
+    if (saving) {
+      return;
+    }
 
     if (!currentBranchId) {
       setError("Select a branch before managing users.");
       return;
     }
 
-    if (!formData.role || !Number.isInteger(Number(formData.role))) {
+    // Accept the direct payload passed by UserFormModal.
+    // Fall back to the current form state if none is provided.
+    const source = submittedData || formData;
+
+    if (!String(source.username || "").trim()) {
+      setError("Username is required.");
+      return;
+    }
+
+    if (
+      !source.role ||
+      !Number.isInteger(Number(source.role))
+    ) {
       setError("Select a valid role.");
       return;
     }
 
-    if (!editingUser && formData.password.length < 8) {
+    // New users always receive the default password when blank.
+    // Editing a user does not change their existing password.
+    const password = editingUser
+      ? ""
+      : String(source.password || "").trim() || DEFAULT_PASSWORD;
+
+    if (!editingUser && password.length < 8) {
       setError("Password must contain at least 8 characters.");
       return;
     }
@@ -224,18 +291,19 @@ export default function useUsers() {
       setError("");
 
       const payload = {
-        username: formData.username.trim(),
-        first_name: formData.first_name,
-        last_name: formData.last_name,
-        email: formData.email,
-        phone: formData.phone,
-        role: Number(formData.role),
+        username: String(source.username).trim(),
+        first_name: source.first_name || "",
+        last_name: source.last_name || "",
+        email: source.email || "",
+        phone: source.phone || "",
+        role: Number(source.role),
         branch: Number(currentBranchId),
-        is_active: formData.is_active,
+        is_active: source.is_active ?? true,
       };
 
       if (!editingUser) {
-        payload.password = formData.password;
+        payload.password = password;
+
         await userApi.create(payload);
       } else {
         await userApi.update(editingUser.id, payload);
@@ -244,6 +312,7 @@ export default function useUsers() {
       setShowModal(false);
       setEditingUser(null);
       resetForm();
+
       await loadUsers();
     } catch (err) {
       setError(getErrorMessage(err));
@@ -252,12 +321,24 @@ export default function useUsers() {
     }
   };
 
+  // --------------------------------------------------
+  // ACTIVATE / DEACTIVATE USER
+  // --------------------------------------------------
+
   const toggleStatus = async (user) => {
+    if (saving) {
+      return;
+    }
+
     try {
       setError("");
 
-      if (String(getBranchId(user)) !== String(currentBranchId)) {
-        setError("You cannot change a user outside the selected branch.");
+      if (
+        String(getBranchId(user)) !== String(currentBranchId)
+      ) {
+        setError(
+          "You cannot change a user outside the selected branch."
+        );
         return;
       }
 
@@ -273,16 +354,27 @@ export default function useUsers() {
     }
   };
 
+  // --------------------------------------------------
+  // DELETE USER
+  // --------------------------------------------------
+
   const openDelete = (user) => {
     setDeletingUser(user);
     setShowDeleteModal(true);
+    setError("");
   };
 
   const deleteUser = async () => {
-    if (!deletingUser) return;
+    if (!deletingUser || saving) {
+      return;
+    }
 
-    if (String(getBranchId(deletingUser)) !== String(currentBranchId)) {
-      setError("You cannot delete a user outside the selected branch.");
+    if (
+      String(getBranchId(deletingUser)) !== String(currentBranchId)
+    ) {
+      setError(
+        "You cannot delete a user outside the selected branch."
+      );
       return;
     }
 
@@ -291,11 +383,12 @@ export default function useUsers() {
       setError("");
 
       await userApi.delete(deletingUser.id);
+
       setShowDeleteModal(false);
       setDeletingUser(null);
 
       if (users.length === 1 && page > 1) {
-        setPage((prev) => prev - 1);
+        setPage((previous) => previous - 1);
       } else {
         await loadUsers();
       }
@@ -306,6 +399,10 @@ export default function useUsers() {
     }
   };
 
+  // --------------------------------------------------
+  // FILTERS
+  // --------------------------------------------------
+
   const clearFilters = () => {
     setSearch("");
     setRoleFilter("");
@@ -313,14 +410,59 @@ export default function useUsers() {
     setPage(1);
   };
 
+  // --------------------------------------------------
+  // RETURN HOOK API
+  // --------------------------------------------------
+
   return {
-    users, branches, loading, branchesLoading, saving, error, setError,
-    search, setSearch, roleFilter, setRoleFilter,
-    statusFilter, setStatusFilter, page, setPage, pageSize,
-    totalPages, totalUsers, showModal, setShowModal,
-    editingUser, showDeleteModal, setShowDeleteModal, deletingUser,
-    formData, handleChange, loadUsers, openAdd, openEdit,
-    submitUser, toggleStatus, openDelete, deleteUser, clearFilters,
-    currentBranch, currentBranchId,
+    users,
+    branches,
+
+    loading,
+    branchesLoading,
+    saving,
+    error,
+    setError,
+
+    search,
+    setSearch,
+
+    roleFilter,
+    setRoleFilter,
+
+    statusFilter,
+    setStatusFilter,
+
+    page,
+    setPage,
+    pageSize,
+
+    totalPages,
+    totalUsers,
+
+    showModal,
+    setShowModal,
+
+    editingUser,
+
+    showDeleteModal,
+    setShowDeleteModal,
+
+    deletingUser,
+
+    formData,
+    handleChange,
+
+    loadUsers,
+    openAdd,
+    openEdit,
+    submitUser,
+    toggleStatus,
+    openDelete,
+    deleteUser,
+    clearFilters,
+
+    currentBranch,
+    currentBranchId,
   };
 }
