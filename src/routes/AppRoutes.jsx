@@ -25,7 +25,7 @@ import POS from "../pages/pos/POS";
 import Sales from "../pages/sales/Sales";
 import Customers from "../pages/customers/Customers";
 import Reports from "../pages/Reports";
-import Users from "../pages/Users";
+import Users from "../pages/users/Users";
 import Settings from "../pages/settings/Settings";
 import Brands from "../pages/Brands";
 
