@@ -1,333 +1,246 @@
-
-import React from 'react';
-import { NavLink } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
+import React from "react";
+import { NavLink } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import { useAuth } from "../../context/AuthContext";
 
 const Sidebar = () => {
   const { hasPermission } = useAuth();
+  const { t } = useTranslation();
 
-  // ============================================================
-  // MENU CONFIGURATION
-  // ============================================================
-  //
-  // `permission` controls whether the menu item is displayed.
-  //
-  // IMPORTANT:
-  // This only controls the FRONTEND UI.
-  // Django backend MUST also enforce the same permissions.
-  //
   const menuItems = [
-    // ==========================================================
-    // MAIN
-    // ==========================================================
     {
-      section: 'MAIN',
+      section: "main",
       items: [
         {
-          name: 'Dashboard',
-          icon: 'bi-grid-1x2-fill',
-          path: '/dashboard',
-          permission: 'dashboard.view_dashboard',
+          name: "dashboard",
+          icon: "bi-grid-1x2-fill",
+          path: "/dashboard",
+          permission: "dashboard.view_dashboard",
         },
         {
-          name: 'POS / Sales',
-          icon: 'bi-cart3',
-          path: '/pos',
-          permission: 'sales.view_sale',
+          name: "pos_sales",
+          icon: "bi-cart3",
+          path: "/pos",
+          permission: "sales.view_sale",
         },
       ],
     },
-
-    // ==========================================================
-    // SALES
-    // ==========================================================
     {
-      section: 'SALES',
+      section: "sales_section",
       items: [
         {
-          name: 'Sales',
-          icon: 'bi-receipt',
-          path: '/sales',
-          permission: 'sales.view_sale',
+          name: "sales",
+          icon: "bi-receipt",
+          path: "/sales",
+          permission: "sales.view_sale",
         },
         {
-          name: 'Customers',
-          icon: 'bi-people',
-          path: '/customers',
-          permission: 'customers.view_customer',
+          name: "customers",
+          icon: "bi-people",
+          path: "/customers",
+          permission: "customers.view_customer",
         },
         {
-          name: 'Returns',
-          icon: 'bi-arrow-return-left',
-          path: '/returns',
-          permission: 'sales.return_sale',
+          name: "returns",
+          icon: "bi-arrow-return-left",
+          path: "/returns",
+          permission: "sales.return_sale",
         },
       ],
     },
-
-    // ==========================================================
-    // INVENTORY
-    // ==========================================================
     {
-      section: 'INVENTORY',
+      section: "inventory_section",
       items: [
         {
-          name: 'Products',
-          icon: 'bi-box-seam',
-          path: '/products',
-          permission: 'products.view_product',
+          name: "products",
+          icon: "bi-box-seam",
+          path: "/products",
+          permission: "products.view_product",
         },
         {
-          name: 'Inventory',
-          icon: 'bi-stack',
-          path: '/inventory',
-          permission: 'inventory.view_stock',
+          name: "inventory",
+          icon: "bi-stack",
+          path: "/inventory",
+          permission: "inventory.view_stock",
         },
         {
-          name: 'Categories',
-          icon: 'bi-tags',
-          path: '/categories',
-          permission: 'products.view_category',
+          name: "categories",
+          icon: "bi-tags",
+          path: "/categories",
+          permission: "products.view_category",
         },
         {
-          name: 'Brands',
-          icon: 'bi-award',
-          path: '/brands',
-          permission: 'products.view_brand',
+          name: "brands",
+          icon: "bi-award",
+          path: "/brands",
+          permission: "products.view_brand",
         },
         {
-          name: 'Purchases',
-          icon: 'bi-bag-plus',
-          path: '/purchases',
-          permission: 'purchases.view_purchase',
+          name: "purchases",
+          icon: "bi-bag-plus",
+          path: "/purchases",
+          permission: "purchases.view_purchase",
         },
         {
-          name: 'Suppliers',
-          icon: 'bi-truck',
-          path: '/suppliers',
-          permission: 'suppliers.view_supplier',
+          name: "suppliers",
+          icon: "bi-truck",
+          path: "/suppliers",
+          permission: "suppliers.view_supplier",
         },
         {
-          name: 'Stock Adjustments',
-          icon: 'bi-sliders',
-          path: '/stock-adjustments',
-          permission: 'inventory.change_stock',
+          name: "stock_adjustments",
+          icon: "bi-sliders",
+          path: "/stock-adjustments",
+          permission: "inventory.change_stock",
         },
         {
-          name: 'Stock Movements',
-          icon: 'bi-arrow-left-right',
-          path: '/stock-movements',
-          permission: 'inventory.view_stockmovement',
+          name: "stock_movements",
+          icon: "bi-arrow-left-right",
+          path: "/stock-movements",
+          permission: "inventory.view_stockmovement",
         },
       ],
     },
-
-    // ==========================================================
-    // FINANCE
-    // ==========================================================
     {
-      section: 'FINANCE',
+      section: "finance_section",
       items: [
         {
-          name: 'Expenses',
-          icon: 'bi-wallet2',
-          path: '/expenses',
-          permission: 'expenses.view_expense',
+          name: "expenses",
+          icon: "bi-wallet2",
+          path: "/expenses",
+          permission: "expenses.view_expense",
         },
         {
-          name: 'Payments',
-          icon: 'bi-credit-card',
-          path: '/payments',
-          permission: 'payments.view_payment',
+          name: "payments",
+          icon: "bi-credit-card",
+          path: "/payments",
+          permission: "payments.view_payment",
         },
         {
-          name: 'Cash Management',
-          icon: 'bi-cash-stack',
-          path: '/cash-management',
-          permission: 'cash_management.view_cash',
+          name: "cash_management",
+          icon: "bi-cash-stack",
+          path: "/cash-management",
+          permission: "cash_management.view_cash",
         },
       ],
     },
-
-    // ==========================================================
-    // REPORTS
-    // ==========================================================
     {
-      section: 'REPORTS',
+      section: "reports_section",
       items: [
         {
-          name: 'Sales Reports',
-          icon: 'bi-bar-chart-line',
-          path: '/reports/sales',
-          permission: 'reports.view_sales_report',
+          name: "sales_reports",
+          icon: "bi-bar-chart-line",
+          path: "/reports/sales",
+          permission: "reports.view_sales_report",
         },
         {
-          name: 'Inventory Reports',
-          icon: 'bi-clipboard-data',
-          path: '/reports/inventory',
-          permission: 'reports.view_inventory_report',
+          name: "inventory_reports",
+          icon: "bi-clipboard-data",
+          path: "/reports/inventory",
+          permission: "reports.view_inventory_report",
         },
         {
-          name: 'Expense Reports',
-          icon: 'bi-file-earmark-bar-graph',
-          path: '/reports/expenses',
-          permission: 'reports.view_expense_report',
+          name: "expense_reports",
+          icon: "bi-file-earmark-bar-graph",
+          path: "/reports/expenses",
+          permission: "reports.view_expense_report",
         },
         {
-          name: 'Profit & Loss',
-          icon: 'bi-graph-up-arrow',
-          path: '/reports/profit-loss',
-          permission: 'reports.view_profit_loss',
+          name: "profit_loss",
+          icon: "bi-graph-up-arrow",
+          path: "/reports/profit-loss",
+          permission: "reports.view_profit_loss",
         },
       ],
     },
-
-    // ==========================================================
-    // SYSTEM
-    // ==========================================================
     {
-      section: 'SYSTEM',
+      section: "system_section",
       items: [
         {
-          name: 'Users',
-          icon: 'bi-people-fill',
-          path: '/users',
-          // Remove the comment if this permission exists:
-          permission: 'accounts.view_user',
+          name: "users",
+          icon: "bi-people-fill",
+          path: "/users",
+          permission: "accounts.view_user",
         },
         {
-          name: 'Roles & Permissions',
-          icon: 'bi-shield-lock',
-          path: '/roles',
-          // Remove the comment if this permission exists:
-          permission: 'roles.view_role',
+          name: "roles_permissions",
+          icon: "bi-shield-lock",
+          path: "/roles",
+          permission: "roles.view_role",
         },
         {
-          name: 'Payment Methods',
-          icon: 'bi-credit-card-2-front',
-          path: '/payment-methods',
-          permission: 'payments.view_paymentmethod',
+          name: "payment_methods",
+          icon: "bi-credit-card-2-front",
+          path: "/payment-methods",
+          permission: "payments.view_paymentmethod",
         },
         {
-          name: 'Settings',
-          icon: 'bi-gear',
-          path: '/settings',
-          permission: 'settings.view_setting',
+          name: "settings",
+          icon: "bi-gear",
+          path: "/settings",
+          permission: "settings.view_setting",
         },
       ],
     },
   ];
 
-  // ============================================================
-  // FILTER MENU BY PERMISSION
-  // ============================================================
-
   const visibleMenuGroups = menuItems
-    .map((group) => {
-      const visibleItems = group.items.filter((item) => {
-        // No permission means everyone can see the item.
-        if (!item.permission) {
-          return true;
-        }
-
-        return hasPermission(item.permission);
-      });
-
-      return {
-        ...group,
-        items: visibleItems,
-      };
-    })
-    // Remove empty sections
+    .map((group) => ({
+      ...group,
+      items: group.items.filter(
+        (item) =>
+          !item.permission || hasPermission(item.permission)
+      ),
+    }))
     .filter((group) => group.items.length > 0);
-
-  // ============================================================
-  // RENDER
-  // ============================================================
 
   return (
     <aside className="sidebar">
-
-      {/* ======================================================
-          BRAND
-      ====================================================== */}
       <div className="brand">
         <div className="brand-icon">
-          <i className="bi bi-shop"></i>
+          <i className="bi bi-shop" />
         </div>
 
         <div>
-          <div className="brand-name">
-            POS SYSTEM
-          </div>
-
-          <small>
-            Retail Management
-          </small>
+          <div className="brand-name">POS SYSTEM</div>
+          <small>{t("retail_management")}</small>
         </div>
       </div>
 
-      {/* ======================================================
-          MENU
-      ====================================================== */}
       <div className="sidebar-menu">
-
         {visibleMenuGroups.map((group) => (
-          <div
-            className="menu-group"
-            key={group.section}
-          >
-
-            {/* SECTION TITLE */}
+          <div className="menu-group" key={group.section}>
             <div className="menu-title">
-              {group.section}
+              {t(group.section)}
             </div>
 
-            {/* MENU ITEMS */}
             {group.items.map((item) => (
               <NavLink
-                key={item.name}
+                key={item.path}
                 to={item.path}
                 className={({ isActive }) =>
-                  `menu-item ${isActive ? 'active' : ''}`
+                  `menu-item ${isActive ? "active" : ""}`
                 }
               >
-                <i className={`bi ${item.icon}`}></i>
+                <i className={`bi ${item.icon}`} />
 
-                <span>
-                  {item.name}
-                </span>
+                <span>{t(item.name)}</span>
               </NavLink>
             ))}
-
           </div>
         ))}
-
       </div>
 
-      {/* ======================================================
-          FOOTER
-      ====================================================== */}
       <div className="sidebar-footer">
-
         <div className="store-status">
-
-          <span className="status-dot"></span>
+          <span className="status-dot" />
 
           <div>
-            <strong>
-              Store Online
-            </strong>
-
-            <small>
-              System operational
-            </small>
+            <strong>{t("store_online")}</strong>
+            <small>{t("system_operational")}</small>
           </div>
-
         </div>
-
       </div>
-
     </aside>
   );
 };

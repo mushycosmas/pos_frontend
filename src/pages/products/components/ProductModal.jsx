@@ -212,7 +212,7 @@ const ProductModal = ({
 
     const payload = {
       name: formData.name.trim(),
-      sku: formData.sku.trim(),
+      sku: formData.sku.trim() || null,
       barcode: formData.barcode.trim() || null,
       description: formData.description.trim(),
 
@@ -333,33 +333,37 @@ const ProductModal = ({
                   />
                 </div>
 
-                {/* SKU */}
-                <div className="col-md-6 mb-3">
-                  <label className="form-label">SKU</label>
-                  <input
-                    className="form-control"
-                    type="text"
-                    name="sku"
-                    value={formData.sku}
-                    onChange={handleChange}
-                    placeholder="Enter SKU"
-                    disabled={saving}
-                  />
-                </div>
+               {/* SKU - OPTIONAL */}
+        <div className="col-md-6 mb-3">
+          <label className="form-label">
+            SKU <small className="text-muted">(Optional)</small>
+          </label>
+          <input
+            className="form-control"
+            type="text"
+            name="sku"
+            value={formData.sku}
+            onChange={handleChange}
+            placeholder="Enter SKU (optional)"
+            disabled={saving}
+          />
+        </div>
 
-                {/* BARCODE */}
-                <div className="col-md-6 mb-3">
-                  <label className="form-label">Barcode</label>
-                  <input
-                    className="form-control"
-                    type="text"
-                    name="barcode"
-                    value={formData.barcode}
-                    onChange={handleChange}
-                    placeholder="Enter barcode"
-                    disabled={saving}
-                  />
-                </div>
+        {/* BARCODE - OPTIONAL */}
+        <div className="col-md-6 mb-3">
+          <label className="form-label">
+            Barcode <small className="text-muted">(Optional)</small>
+          </label>
+          <input
+            className="form-control"
+            type="text"
+            name="barcode"
+            value={formData.barcode}
+            onChange={handleChange}
+            placeholder="Enter barcode (optional)"
+            disabled={saving}
+          />
+        </div>
 
                 {/* UNIT */}
                 <div className="col-md-6 mb-3">
