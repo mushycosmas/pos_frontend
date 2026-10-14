@@ -1,4 +1,3 @@
-
 import api from "./api";
 
 const productsApi = {
@@ -22,15 +21,27 @@ const productsApi = {
     return response.data;
   },
 
-  // PUT /products/{id}/
-  update: async (id, data) => {
-    const response = await api.put(`/products/${id}/`, data);
+  // PUT /products/{id}/?branch=ID
+  update: async (id, data, branchId = null) => {
+    const response = await api.put(
+      `/products/${id}/`,
+      data,
+      {
+        params: branchId ? { branch: branchId } : {},
+      }
+    );
     return response.data;
   },
 
-  // PATCH /products/{id}/
-  patch: async (id, data) => {
-    const response = await api.patch(`/products/${id}/`, data);
+  // PATCH /products/{id}/?branch=ID
+  patch: async (id, data, branchId = null) => {
+    const response = await api.patch(
+      `/products/${id}/`,
+      data,
+      {
+        params: branchId ? { branch: branchId } : {},
+      }
+    );
     return response.data;
   },
 
@@ -40,45 +51,45 @@ const productsApi = {
     return true;
   },
 
-  // Search within the selected branch.
+  // Search within the selected branch
   search: async (query, branchId) => {
     const response = await api.get("/products/", {
       params: {
         search: query,
-        branch: branchId,
+        ...(branchId ? { branch: branchId } : {}),
       },
     });
     return response.data;
   },
 
-  // Active products within the selected branch.
+  // Active products within the selected branch
   getActive: async (branchId) => {
     const response = await api.get("/products/", {
       params: {
         is_active: true,
-        branch: branchId,
+        ...(branchId ? { branch: branchId } : {}),
       },
     });
     return response.data;
   },
 
-  // Products by category within the selected branch.
+  // Products by category
   getByCategory: async (categoryId, branchId) => {
     const response = await api.get("/products/", {
       params: {
         category: categoryId,
-        branch: branchId,
+        ...(branchId ? { branch: branchId } : {}),
       },
     });
     return response.data;
   },
 
-  // Products by brand within the selected branch.
+  // Products by brand
   getByBrand: async (brandId, branchId) => {
     const response = await api.get("/products/", {
       params: {
         brand: brandId,
-        branch: branchId,
+        ...(branchId ? { branch: branchId } : {}),
       },
     });
     return response.data;

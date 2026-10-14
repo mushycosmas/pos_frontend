@@ -810,7 +810,8 @@ const Products = () => {
       if (editingProduct) {
         await productsApi.update(
           editingProduct.id,
-          payload
+          payload,
+          branchId
         );
       } else {
         await productsApi.create(payload);
