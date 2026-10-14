@@ -1,104 +1,60 @@
-import React, { useMemo } from "react";
+import React from "react";
 import { Card, Col, Row } from "react-bootstrap";
 
-const toNumber = (value, fallback = 0) => {
-  if (value === null || value === undefined || value === "") {
-    return fallback;
-  }
+const ProductStats = ({
+  totalProducts = 0,
+  totalStock = 0,
+  inventoryValue = 0,
+  sellingValue = 0,
+  lowStockProducts = 0,
+  outOfStockProducts = 0,
+  formatNumber,
+  formatCurrency,
+}) => {
+  const number = (value) =>
+    typeof formatNumber === "function"
+      ? formatNumber(value)
+      : Number(value || 0).toLocaleString("en-TZ");
 
-  const number = Number(value);
-  return Number.isFinite(number) ? number : fallback;
-};
-
-const ProductStats = ({ products = [] }) => {
-  const stats = useMemo(() => {
-    const normalizedProducts = products.map((product) => {
-      const stock = toNumber(
-        product.current_stock ??
-          product.stock_quantity ??
-          product.stock ??
-          product.quantity
-      );
-
-      const costPrice = toNumber(
-        product.cost_price ?? product.costPrice
-      );
-
-      const minStock = toNumber(
-        product.minimum_stock ??
-          product.min_quantity ??
-          product.min_stock ??
-          product.minStock,
-        5
-      );
-
-      return { stock, costPrice, minStock };
-    });
-
-    return {
-      totalProducts: normalizedProducts.length,
-
-      totalStock: normalizedProducts.reduce(
-        (sum, product) => sum + product.stock,
-        0
-      ),
-
-      inventoryValue: normalizedProducts.reduce(
-        (sum, product) =>
-          sum + product.stock * product.costPrice,
-        0
-      ),
-
-      lowStockProducts: normalizedProducts.filter(
-        (product) =>
-          product.stock > 0 &&
-          product.stock <= product.minStock
-      ).length,
-
-      outOfStockProducts: normalizedProducts.filter(
-        (product) => product.stock <= 0
-      ).length,
-    };
-  }, [products]);
-
-  const formatNumber = (value) =>
-    toNumber(value).toLocaleString("en-TZ", {
-      maximumFractionDigits: 2,
-    });
-
-  const formatCurrency = (value) =>
-    `TSh ${toNumber(value).toLocaleString("en-TZ", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`;
+  const currency = (value) =>
+    typeof formatCurrency === "function"
+      ? formatCurrency(value)
+      : `TSh ${Number(value || 0).toLocaleString("en-TZ", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}`;
 
   const cards = [
     {
       label: "Total Products",
-      value: formatNumber(stats.totalProducts),
+      value: number(totalProducts),
       icon: "bi-box-seam",
       color: "primary",
     },
     {
       label: "Total Stock",
-      value: formatNumber(stats.totalStock),
+      value: number(totalStock),
       icon: "bi-stack",
       color: "success",
     },
     {
       label: "Inventory Value",
-      value: formatCurrency(stats.inventoryValue),
+      value: currency(inventoryValue),
       icon: "bi-currency-exchange",
       color: "info",
     },
     {
       label: "Low / Out of Stock",
-      value: formatNumber(
-        stats.lowStockProducts + stats.outOfStockProducts
-      ),
+      value: number(lowStockProducts + outOfStockProducts),
       icon: "bi-exclamation-triangle",
       color: "danger",
     },
+    {
+  label: "Potential Selling Value",
+  value: currency(sellingValue),
+  icon: "bi-cash-stack",
+  color: "success",
+},
   ];
 
   return (
@@ -112,7 +68,9 @@ const ProductStats = ({ products = [] }) => {
                   <small className="text-muted">
                     {card.label}
                   </small>
-                  <h4 className="mt-2 mb-0">{card.value}</h4>
+                  <h4 className="mt-2 mb-0">
+                    {card.value}
+                  </h4>
                 </div>
 
                 <div

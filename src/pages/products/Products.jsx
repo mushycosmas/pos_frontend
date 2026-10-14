@@ -718,6 +718,19 @@ const Products = () => {
     [products]
   );
 
+  const sellingValue = useMemo(
+  () =>
+    products.reduce((sum, product) => {
+      const stock = getStock(product);
+      const sellingPrice = toNumber(
+        product?.selling_price ?? product?.sellingPrice
+      );
+
+      return sum + stock * sellingPrice;
+    }, 0),
+  [products]
+);
+
   const lowStockProducts = useMemo(
     () =>
       products.filter((product) => {
@@ -939,15 +952,16 @@ const Products = () => {
         onRetry={loadProducts}
       />
 
-      <ProductStats
-        totalProducts={totalProducts}
-        totalStock={totalStock}
-        inventoryValue={inventoryValue}
-        lowStockProducts={lowStockProducts}
-        outOfStockProducts={outOfStockProducts}
-        formatNumber={formatNumber}
-        formatCurrency={formatCurrency}
-      />
+     <ProductStats
+      totalProducts={totalProducts}
+      totalStock={totalStock}
+      inventoryValue={inventoryValue}
+      sellingValue={sellingValue}
+      lowStockProducts={lowStockProducts}
+      outOfStockProducts={outOfStockProducts}
+      formatNumber={formatNumber}
+      formatCurrency={formatCurrency}
+    />
 
       <ProductFilters
         search={search}
