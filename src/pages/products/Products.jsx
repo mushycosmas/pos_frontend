@@ -859,58 +859,56 @@ const Products = () => {
   // ========================================================
 
   const handleDelete = async (product) => {
-    if (!canDeleteProduct) {
-      setError(
-        "You do not have permission to delete products."
-      );
-      return;
-    }
+  if (!canDeleteProduct) {
+    setError(
+      "You do not have permission to delete products."
+    );
+    return;
+  }
 
-    if (!branchId) {
-      setError(
-        "Select a branch before deleting a product."
-      );
-      return;
-    }
+  if (!branchId) {
+    setError(
+      "Select a branch before deleting a product."
+    );
+    return;
+  }
 
-    const confirmed = window.confirm(
-      `Are you sure you want to delete "${product.name}"?`
+  const confirmed = window.confirm(
+    `Are you sure you want to delete "${product.name}"?`
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    setDeletingProductId(product.id);
+    setError("");
+    setSuccess("");
+
+    // Pass the currently selected branch.
+    await productsApi.delete(product.id, branchId);
+
+    setProducts((current) =>
+      current.filter(
+        (item) => item.id !== product.id
+      )
     );
 
-    if (!confirmed) {
-      return;
-    }
+    setSuccess("Product deleted successfully.");
+  } catch (err) {
+    console.error("Failed to delete product:", err);
+    console.error("API response:", err?.response?.data);
 
-    try {
-      setDeletingProductId(product.id);
-      setError("");
-      setSuccess("");
-
-      await productsApi.delete(product.id);
-
-      // Deleting a product is company-level. The API may
-      // reject deletion if inventory or transactions exist.
-      setProducts((current) =>
-        current.filter(
-          (item) => item.id !== product.id
-        )
-      );
-
-      setSuccess("Product deleted successfully.");
-    } catch (err) {
-      console.error(
-        "Failed to delete product:",
-        err
-      );
-
-      setError(
-        err?.response?.data?.detail ||
-          "Failed to delete product. Please try again."
-      );
-    } finally {
-      setDeletingProductId(null);
-    }
-  };
+    setError(
+      err?.response?.data?.detail ||
+        err?.response?.data?.error ||
+        "Failed to delete product. Please try again."
+    );
+  } finally {
+    setDeletingProductId(null);
+  }
+};
 
   // ========================================================
   // RESET FILTERS

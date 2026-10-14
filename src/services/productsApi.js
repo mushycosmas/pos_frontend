@@ -46,10 +46,18 @@ const productsApi = {
   },
 
   // DELETE /products/{id}/
-  delete: async (id) => {
-    await api.delete(`/products/${id}/`);
-    return true;
-  },
+ delete: async (id, branchId = null) => {
+  const response = await api.delete(
+    `/products/${id}/`,
+    {
+      params: branchId
+        ? { branch: branchId }
+        : {},
+    }
+  );
+
+  return response.data;
+},
 
   // Search within the selected branch
   search: async (query, branchId) => {
