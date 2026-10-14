@@ -7,6 +7,21 @@ import {
   Table,
 } from "react-bootstrap";
 
+// Convert text to sentence case while preserving the remaining text.
+
+
+
+const toTitleCase = (value) => {
+  if (value === null || value === undefined || value === "") {
+    return "-";
+  }
+
+  return String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+};
+
 const ProductTable = ({
   products = [],
   loading = false,
@@ -26,9 +41,7 @@ const ProductTable = ({
   onDelete,
   deletingProductId,
 }) => {
-  const hasActions =
-    canEditProduct || canDeleteProduct;
-
+  const hasActions = canEditProduct || canDeleteProduct;
   const columnCount = hasActions ? 11 : 10;
 
   if (!currentBranch?.id && !loading) {
@@ -37,7 +50,7 @@ const ProductTable = ({
         <Card.Body className="text-center py-5">
           <i className="bi bi-building fs-2 d-block mb-3 text-muted" />
 
-          <h6>Select a Branch</h6>
+          <h6>Select a branch</h6>
 
           <p className="text-muted mb-0">
             Please select a branch to view its products and inventory.
@@ -54,12 +67,14 @@ const ProductTable = ({
         {currentBranch && (
           <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
             <div>
-              <h6 className="mb-1">Products & Inventory</h6>
+              <h6 className="mb-1">Products &amp; inventory</h6>
 
               <small className="text-muted">
                 Branch:{" "}
                 <strong>
-                  {currentBranch.name || `Branch ${currentBranch.id}`}
+                  {toTitleCase(
+                    currentBranch.name || `Branch ${currentBranch.id}`
+                  )}
                 </strong>
               </small>
             </div>
@@ -84,19 +99,19 @@ const ProductTable = ({
             <Table hover className="align-middle mb-0">
               <thead>
                 <tr>
-                  <th>PRODUCT</th>
+                  <th>Product</th>
                   <th>SKU</th>
-                  <th>BRAND</th>
-                  <th>CATEGORY</th>
-                  <th>SUPPLIER</th>
-                  <th>CREATED BY</th>
-                  <th className="text-end">COST</th>
-                  <th className="text-end">PRICE</th>
-                  <th className="text-end">STOCK</th>
-                  <th>STATUS</th>
+                  <th>Brand</th>
+                  <th>Category</th>
+                  <th>Supplier</th>
+                  <th>Created by</th>
+                  <th className="text-end">Cost</th>
+                  <th className="text-end">Price</th>
+                  <th className="text-end">Stock</th>
+                  <th>Status</th>
 
                   {hasActions && (
-                    <th className="text-end">ACTIONS</th>
+                    <th className="text-end">Actions</th>
                   )}
                 </tr>
               </thead>
@@ -134,13 +149,11 @@ const ProductTable = ({
                     };
 
                     const costPrice = toNumber(
-                      product?.cost_price ??
-                        product?.costPrice
+                      product?.cost_price ?? product?.costPrice
                     );
 
                     const sellingPrice = toNumber(
-                      product?.selling_price ??
-                        product?.sellingPrice
+                      product?.selling_price ?? product?.sellingPrice
                     );
 
                     const isDeleting =
@@ -148,10 +161,12 @@ const ProductTable = ({
 
                     return (
                       <tr key={product.id}>
-                        {/* PRODUCT */}
+                        {/* PRODUCT NAME */}
                         <td>
                           <strong>
-                            {product.name || "Unnamed Product"}
+                            {toTitleCase(
+                              product.name || "Unnamed product"
+                            )}
                           </strong>
 
                           {product.barcode && (
@@ -161,24 +176,34 @@ const ProductTable = ({
                           )}
                         </td>
 
-                        {/* SKU */}
+                        {/* SKU: KEEP UPPERCASE */}
                         <td>
-                          <code>{product.sku || "-"}</code>
+                          <code>
+                            {product.sku
+                              ? String(product.sku).toUpperCase()
+                              : "-"}
+                          </code>
                         </td>
 
                         {/* BRAND */}
-                        <td>{brand?.name || "-"}</td>
+                        <td>
+                          {toTitleCase(brand?.name)}
+                        </td>
 
                         {/* CATEGORY */}
-                        <td>{category?.name || "-"}</td>
+                        <td>
+                          {toTitleCase(category?.name)}
+                        </td>
 
                         {/* SUPPLIER */}
-                        <td>{supplier?.name || "-"}</td>
+                        <td>
+                          {toTitleCase(supplier?.name)}
+                        </td>
 
                         {/* CREATED BY */}
                         <td>
                           <span className="fw-semibold">
-                            {createdBy}
+                            {toTitleCase(createdBy)}
                           </span>
                         </td>
 
@@ -204,7 +229,7 @@ const ProductTable = ({
                         {/* STOCK STATUS */}
                         <td>
                           <Badge bg={status.variant}>
-                            {status.text}
+                            {toTitleCase(status.text)}
                           </Badge>
                         </td>
 
@@ -217,7 +242,9 @@ const ProductTable = ({
                                 size="sm"
                                 className="border-0"
                                 disabled={isDeleting}
-                                aria-label={`Actions for ${product.name || "product"}`}
+                                aria-label={`Actions for ${
+                                  product.name || "product"
+                                }`}
                               >
                                 {isDeleting ? (
                                   <Spinner
@@ -232,26 +259,21 @@ const ProductTable = ({
                               <Dropdown.Menu>
                                 {canEditProduct && (
                                   <Dropdown.Item
-                                    onClick={() =>
-                                      onEdit?.(product)
-                                    }
+                                    onClick={() => onEdit?.(product)}
                                   >
                                     <i className="bi bi-pencil me-2" />
                                     Edit
                                   </Dropdown.Item>
                                 )}
 
-                                {canEditProduct &&
-                                  canDeleteProduct && (
-                                    <Dropdown.Divider />
-                                  )}
+                                {canEditProduct && canDeleteProduct && (
+                                  <Dropdown.Divider />
+                                )}
 
                                 {canDeleteProduct && (
                                   <Dropdown.Item
                                     className="text-danger"
-                                    onClick={() =>
-                                      onDelete?.(product)
-                                    }
+                                    onClick={() => onDelete?.(product)}
                                   >
                                     <i className="bi bi-trash me-2" />
                                     Delete

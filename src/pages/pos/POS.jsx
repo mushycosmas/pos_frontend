@@ -286,6 +286,17 @@ const payload = {
     pos.clearCart();
   };
 
+  
+const toTitleCase = (value) => {
+  if (!value) return "";
+
+  return String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+};
+
+
   return (
     <div className="container-fluid py-3">
       <POSHeader
@@ -329,11 +340,18 @@ const payload = {
             setSearch={pos.setSearch}
           />
 
-          <ProductGrid
-            products={filteredProducts}
-            loading={inventoryLoading}
-            onAddToCart={pos.addToCart}
-          />
+          
+        <ProductGrid
+          products={filteredProducts.map((product) => ({
+            ...product,
+            name: toTitleCase(
+              product?.name ?? product?.product_name ?? ""
+            ),
+          }))}
+          loading={inventoryLoading}
+          onAddToCart={pos.addToCart}
+        />
+
         </Col>
 
         <Col lg={5} xl={4}>
