@@ -1,6 +1,20 @@
 import React, { useEffect, useState } from "react";
 
 // ==========================================================
+// SKU GENERATOR
+// ==========================================================
+
+const generateSKU = (name = "") =>
+  name
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+
+// ==========================================================
 // INITIAL FORM DATA
 // ==========================================================
 
@@ -61,9 +75,7 @@ const createInitialForm = (product, currentBranch) => {
               : "0",
 
     unit: product?.unit || "pcs",
-
     branch: branchId !== "" ? String(branchId) : "",
-
     is_active: product?.is_active ?? true,
   };
 };
@@ -121,6 +133,10 @@ const ProductModal = ({
 
   const [error, setError] = useState("");
 
+  // True when the user has manually edited the SKU.
+  const [skuManuallyEdited, setSkuManuallyEdited] =
+    useState(false);
+
   const isEditing = Boolean(product?.id);
 
   // --------------------------------------------------------
@@ -129,8 +145,24 @@ const ProductModal = ({
 
   useEffect(() => {
     if (show) {
-      setFormData(createInitialForm(product, currentBranch));
+      const initialData = createInitialForm(
+        product,
+        currentBranch
+      );
+
+      setFormData(initialData);
       setError("");
+
+      // Preserve existing SKU when editing.
+      // Generate automatically for new products.
+      setSkuManuallyEdited(
+        Boolean(product?.sku?.trim())
+      );
+
+      if (!product?.id && !initialData.sku) {
+        initialData.sku = generateSKU(initialData.name);
+        setFormData(initialData);
+      }
     }
   }, [show, product, currentBranch]);
 
@@ -141,9 +173,38 @@ const ProductModal = ({
   const handleChange = (event) => {
     const { name, value, type, checked } = event.target;
 
+    if (name === "name") {
+      setFormData((previous) => ({
+        ...previous,
+        name: value,
+        ...(!skuManuallyEdited
+          ? { sku: generateSKU(value) }
+          : {}),
+      }));
+    } else if (name === "sku") {
+      setSkuManuallyEdited(true);
+
+      setFormData((previous) => ({
+        ...previous,
+        sku: value,
+      }));
+    } else {
+      setFormData((previous) => ({
+        ...previous,
+        [name]: type === "checkbox" ? checked : value,
+      }));
+    }
+
+    setError("");
+  };
+
+  // Allow users to resume automatic SKU generation.
+  const handleRegenerateSKU = () => {
+    setSkuManuallyEdited(false);
+
     setFormData((previous) => ({
       ...previous,
-      [name]: type === "checkbox" ? checked : value,
+      sku: generateSKU(previous.name),
     }));
 
     setError("");
@@ -206,19 +267,24 @@ const ProductModal = ({
       return;
     }
 
-    // ------------------------------------------------------
-    // BUILD API PAYLOAD
-    // ------------------------------------------------------
+    // Use generated SKU if the SKU is blank.
+    const finalSKU =
+      formData.sku.trim() ||
+      generateSKU(formData.name);
 
     const payload = {
       name: formData.name.trim(),
-      sku: formData.sku.trim() || null,
+      sku: finalSKU || null,
       barcode: formData.barcode.trim() || null,
       description: formData.description.trim(),
 
       brand: formData.brand ? Number(formData.brand) : null,
-      category: formData.category ? Number(formData.category) : null,
-      supplier: formData.supplier ? Number(formData.supplier) : null,
+      category: formData.category
+        ? Number(formData.category)
+        : null,
+      supplier: formData.supplier
+        ? Number(formData.supplier)
+        : null,
 
       cost_price: Number(formData.cost_price),
       selling_price: Number(formData.selling_price),
@@ -226,22 +292,16 @@ const ProductModal = ({
 
       unit: formData.unit,
 
-      // Always use the currently selected branch.
+      // Keep the currently selected branch.
       branch: branchId,
 
       is_active: formData.is_active,
     };
 
-    // Debug: verify branch ID before the API request.
     console.log("Active branch:", currentBranch);
     console.log("Product payload:", payload);
-    console.log("Submitted branch ID:", payload.branch);
 
     setError("");
-
-    // ------------------------------------------------------
-    // SAVE PRODUCT
-    // ------------------------------------------------------
 
     try {
       await onSave(payload);
@@ -267,7 +327,6 @@ const ProductModal = ({
     >
       <div className="modal-dialog modal-dialog-centered modal-lg">
         <div className="modal-content">
-
           {/* HEADER */}
           <div className="modal-header">
             <h5 className="modal-title">
@@ -289,7 +348,6 @@ const ProductModal = ({
           </div>
 
           <form onSubmit={handleSubmit}>
-            {/* BODY */}
             <div className="modal-body">
               {error && (
                 <div className="alert alert-danger" role="alert">
@@ -301,7 +359,6 @@ const ProductModal = ({
               {/* ACTIVE BRANCH */}
               <div className="alert alert-light border">
                 <i className="bi bi-geo-alt me-2" />
-
                 Selected branch:{" "}
                 <strong>
                   {currentBranch?.name || "No branch selected"}
@@ -317,10 +374,12 @@ const ProductModal = ({
               </div>
 
               <div className="row">
-
                 {/* PRODUCT NAME */}
                 <div className="col-md-6 mb-3">
-                  <label className="form-label">Product Name *</label>
+                  <label className="form-label">
+                    Product Name *
+                  </label>
+
                   <input
                     className="form-control"
                     type="text"
@@ -333,41 +392,62 @@ const ProductModal = ({
                   />
                 </div>
 
-               {/* SKU - OPTIONAL */}
-        <div className="col-md-6 mb-3">
-          <label className="form-label">
-            SKU <small className="text-muted">(Optional)</small>
-          </label>
-          <input
-            className="form-control"
-            type="text"
-            name="sku"
-            value={formData.sku}
-            onChange={handleChange}
-            placeholder="Enter SKU (optional)"
-            disabled={saving}
-          />
-        </div>
+                {/* SKU */}
+                <div className="col-md-6 mb-3">
+                  <label className="form-label">
+                    SKU <small className="text-muted">(Optional)</small>
+                  </label>
 
-        {/* BARCODE - OPTIONAL */}
-        <div className="col-md-6 mb-3">
-          <label className="form-label">
-            Barcode <small className="text-muted">(Optional)</small>
-          </label>
-          <input
-            className="form-control"
-            type="text"
-            name="barcode"
-            value={formData.barcode}
-            onChange={handleChange}
-            placeholder="Enter barcode (optional)"
-            disabled={saving}
-          />
-        </div>
+                  <div className="input-group">
+                    <input
+                      className="form-control"
+                      type="text"
+                      name="sku"
+                      value={formData.sku}
+                      onChange={handleChange}
+                      placeholder="Auto-generated from product name"
+                      disabled={saving}
+                    />
+
+                    <button
+                      className="btn btn-outline-secondary"
+                      type="button"
+                      onClick={handleRegenerateSKU}
+                      disabled={saving || !formData.name.trim()}
+                      title="Generate SKU from product name"
+                    >
+                      <i className="bi bi-arrow-repeat me-1" />
+                      Generate
+                    </button>
+                  </div>
+
+                  <small className="text-muted">
+                    Automatically generated from the product name.
+                    You can edit it or click Generate to recreate it.
+                  </small>
+                </div>
+
+                {/* BARCODE */}
+                <div className="col-md-6 mb-3">
+                  <label className="form-label">
+                    Barcode <small className="text-muted">(Optional)</small>
+                  </label>
+
+                  <input
+                    className="form-control"
+                    type="text"
+                    name="barcode"
+                    value={formData.barcode}
+                    onChange={handleChange}
+                    placeholder="Enter barcode (optional)"
+                    disabled={saving}
+                  />
+                </div>
 
                 {/* UNIT */}
                 <div className="col-md-6 mb-3">
                   <label className="form-label">Unit</label>
+
                   <select
                     className="form-select"
                     name="unit"
@@ -394,6 +474,7 @@ const ProductModal = ({
                 {/* BRAND */}
                 <div className="col-md-4 mb-3">
                   <label className="form-label">Brand</label>
+
                   <select
                     className="form-select"
                     name="brand"
@@ -415,6 +496,7 @@ const ProductModal = ({
                 {/* CATEGORY */}
                 <div className="col-md-4 mb-3">
                   <label className="form-label">Category</label>
+
                   <select
                     className="form-select"
                     name="category"
@@ -436,6 +518,7 @@ const ProductModal = ({
                 {/* SUPPLIER */}
                 <div className="col-md-4 mb-3">
                   <label className="form-label">Supplier</label>
+
                   <select
                     className="form-select"
                     name="supplier"
@@ -457,7 +540,10 @@ const ProductModal = ({
 
                 {/* COST PRICE */}
                 <div className="col-md-4 mb-3">
-                  <label className="form-label">Cost Price (TSh) *</label>
+                  <label className="form-label">
+                    Cost Price (TSh) *
+                  </label>
+
                   <input
                     className="form-control"
                     type="number"
@@ -477,6 +563,7 @@ const ProductModal = ({
                   <label className="form-label">
                     Selling Price (TSh) *
                   </label>
+
                   <input
                     className="form-control"
                     type="number"
@@ -494,6 +581,7 @@ const ProductModal = ({
                 {/* MINIMUM STOCK */}
                 <div className="col-md-4 mb-3">
                   <label className="form-label">Minimum Stock</label>
+
                   <input
                     className="form-control"
                     type="number"
@@ -505,6 +593,7 @@ const ProductModal = ({
                     placeholder="0"
                     disabled={saving}
                   />
+
                   <small className="text-muted">
                     Used to identify low-stock products.
                   </small>
@@ -513,12 +602,14 @@ const ProductModal = ({
                 {/* BRANCH */}
                 <div className="col-md-12 mb-3">
                   <label className="form-label">Branch</label>
+
                   <input
                     className="form-control"
                     value={currentBranch?.name || ""}
                     readOnly
                     disabled={!currentBranch?.id}
                   />
+
                   <small className="text-muted">
                     The active branch is assigned automatically.
                   </small>
@@ -527,6 +618,7 @@ const ProductModal = ({
                 {/* DESCRIPTION */}
                 <div className="col-12 mb-3">
                   <label className="form-label">Description</label>
+
                   <textarea
                     className="form-control"
                     name="description"
@@ -550,6 +642,7 @@ const ProductModal = ({
                       onChange={handleChange}
                       disabled={saving}
                     />
+
                     <label
                       className="form-check-label"
                       htmlFor="product_is_active"
@@ -558,7 +651,6 @@ const ProductModal = ({
                     </label>
                   </div>
                 </div>
-
               </div>
             </div>
 
@@ -592,7 +684,6 @@ const ProductModal = ({
               </button>
             </div>
           </form>
-
         </div>
       </div>
     </div>
