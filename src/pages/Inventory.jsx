@@ -242,6 +242,16 @@ const Inventory = () => {
     }
   };
 
+  
+const toTitleCase = (value) => {
+  if (!value) return "Unnamed Product";
+
+  return String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+};
+
   // =====================================================
   // RENDER
   // =====================================================
@@ -542,9 +552,10 @@ const Inventory = () => {
 
                           <div>
                             <strong>
-                              {product.name ||
-                                "Unnamed Product"}
-                            </strong>
+                            {toTitleCase(
+                              product.name ?? product.product_name
+                            )}
+                          </strong>
                           </div>
                         </div>
                       </td>
