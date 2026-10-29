@@ -31,7 +31,7 @@ import SalesTable from "./components/SalesTable";
 import SaleViewModal from "./components/SaleViewModal";
 import SaleDeleteModal from "./components/SaleDeleteModal";
 
-const PAGE_SIZE = 2000;
+const PAGE_SIZE = 20;
 
 const EMPTY_PAGINATION = {
   count: 0,
