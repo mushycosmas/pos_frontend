@@ -1,3 +1,4 @@
+
 import React, {
   useCallback,
   useEffect,
@@ -5,7 +6,13 @@ import React, {
   useState,
 } from "react";
 
-import { Card, Col, Row, Spinner } from "react-bootstrap";
+import {
+  Card,
+  Col,
+  Row,
+  Spinner,
+  Button,
+} from "react-bootstrap";
 
 import salesApi from "../../services/SalesApi";
 import { useBranch } from "../../context/BranchContext";
@@ -63,7 +70,7 @@ const getSaleDate = (sale) => {
     return String(value).slice(0, 10);
   }
 
-  // Local calendar date avoids timezone shifts when comparing dates.
+  // Local calendar date avoids timezone shifts.
   return [
     parsed.getFullYear(),
     String(parsed.getMonth() + 1).padStart(2, "0"),
@@ -80,7 +87,9 @@ const getPaymentStatus = (sale) => {
   if (explicitStatus) {
     const status = normalize(explicitStatus);
 
-    if (["paid", "fully_paid", "completed"].includes(status)) {
+    if (
+      ["paid", "fully_paid", "completed"].includes(status)
+    ) {
       return "PAID";
     }
 
@@ -122,13 +131,14 @@ const getSearchableText = (sale) =>
 const Sales = () => {
   const { currentBranchId } = useBranch();
 
-  // Data and request state
+  // Data and request state.
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState("");
 
-  // Filters
+  // Filters.
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [paymentStatusFilter, setPaymentStatusFilter] =
@@ -136,11 +146,11 @@ const Sales = () => {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
-  // Pagination
+  // Pagination.
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState(EMPTY_PAGINATION);
 
-  // Modals
+  // Modals.
   const [selectedSale, setSelectedSale] = useState(null);
   const [saleToDelete, setSaleToDelete] = useState(null);
   const [showViewModal, setShowViewModal] = useState(false);
@@ -150,10 +160,10 @@ const Sales = () => {
   const [reloadKey, setReloadKey] = useState(0);
 
   /*
-   * Fetch sales.
+   * FETCH SALES
    *
-   * Filters are sent to Django so the backend can filter the
-   * complete dataset before pagination.
+   * Original implementation preserved.
+   * Filters are sent to Django before pagination.
    */
   const loadSales = useCallback(async () => {
     setLoading(true);
@@ -165,9 +175,11 @@ const Sales = () => {
         page_size: PAGE_SIZE,
       };
 
-      if (currentBranchId !== undefined &&
-          currentBranchId !== null &&
-          currentBranchId !== "") {
+      if (
+        currentBranchId !== undefined &&
+        currentBranchId !== null &&
+        currentBranchId !== ""
+      ) {
         params.branch = currentBranchId;
       }
 
@@ -215,15 +227,19 @@ const Sales = () => {
         next = payload.next ?? null;
         previous = payload.previous ?? null;
       } else {
-        throw new Error("Unexpected sales API response format.");
+        throw new Error(
+          "Unexpected sales API response format."
+        );
       }
 
       setSales(results);
+
       setPagination({
         count,
         next,
         previous,
       });
+
     } catch (err) {
       console.error("Failed to load sales:", err);
 
@@ -232,10 +248,11 @@ const Sales = () => {
 
       setError(
         err?.response?.data?.detail ||
-          err?.response?.data?.message ||
-          err?.message ||
-          "Failed to load sales. Please try again."
+        err?.response?.data?.message ||
+        err?.message ||
+        "Failed to load sales. Please try again."
       );
+
     } finally {
       setLoading(false);
     }
@@ -255,7 +272,9 @@ const Sales = () => {
   }, [loadSales]);
 
   /*
-   * Reset pagination when filters or the branch changes.
+   * RESET PAGINATION WHEN FILTERS CHANGE
+   *
+   * Original implementation preserved.
    */
   useEffect(() => {
     setPage(1);
@@ -269,8 +288,9 @@ const Sales = () => {
   ]);
 
   /*
-   * Apply filters to the records currently returned by the API.
-   * Backend filtering is still needed for correct all-page totals.
+   * FILTER SALES
+   *
+   * Original implementation preserved.
    */
   const filteredSales = useMemo(() => {
     return sales.filter((sale) => {
@@ -313,7 +333,7 @@ const Sales = () => {
   ]);
 
   /*
-   * Totals update automatically when the filtered list changes.
+   * FILTERED SALES SUMMARY
    */
   const filteredSalesSummary = useMemo(
     () =>
@@ -339,7 +359,7 @@ const Sales = () => {
   );
 
   /*
-   * Existing SalesStats component.
+   * SALES STATISTICS
    */
   const statistics = useMemo(() => {
     const completedSales = filteredSales.filter(
@@ -358,6 +378,7 @@ const Sales = () => {
     };
   }, [filteredSales, filteredSalesSummary]);
 
+  // Pagination calculations.
   const totalPages = Math.max(
     1,
     Math.ceil(pagination.count / PAGE_SIZE)
@@ -367,14 +388,14 @@ const Sales = () => {
   const canGoNext = page < totalPages;
 
   /*
-   * Refresh sales.
+   * REFRESH SALES
    */
   const handleRefresh = useCallback(() => {
     setReloadKey((value) => value + 1);
   }, []);
 
   /*
-   * Clear all filters.
+   * CLEAR ALL FILTERS
    */
   const handleClearFilters = useCallback(() => {
     setSearch("");
@@ -386,7 +407,7 @@ const Sales = () => {
   }, []);
 
   /*
-   * Pagination.
+   * PAGINATION
    */
   const handlePageChange = useCallback(
     (nextPage) => {
@@ -402,7 +423,111 @@ const Sales = () => {
   );
 
   /*
-   * Open sale details.
+   * EXPORT PDF
+   *
+   * Independent of loadSales().
+   * Does not modify filters, sales state or pagination.
+   */
+  const handleExportPdf = useCallback(async () => {
+    if (typeof salesApi.exportPdf !== "function") {
+      setError(
+        "PDF export method is missing in SalesApi.js."
+      );
+      return;
+    }
+
+    setExporting(true);
+    setError("");
+
+    try {
+      const params = {};
+
+      // Branch filter.
+      if (
+        currentBranchId !== undefined &&
+        currentBranchId !== null &&
+        currentBranchId !== ""
+      ) {
+        params.branch = currentBranchId;
+      }
+
+      // Search filter.
+      if (search.trim()) {
+        params.search = search.trim();
+      }
+
+      // Sale status filter.
+      if (statusFilter !== "ALL") {
+        params.status = statusFilter;
+      }
+
+      // Payment status filter.
+      if (paymentStatusFilter !== "ALL") {
+        params.payment_status = paymentStatusFilter;
+      }
+
+      // Date filters.
+      if (dateFrom) {
+        params.date_from = dateFrom;
+      }
+
+      if (dateTo) {
+        params.date_to = dateTo;
+      }
+
+      // Request PDF from Django.
+      const response = await salesApi.exportPdf(params);
+
+      if (!response?.data) {
+        throw new Error("The PDF response is empty.");
+      }
+
+      const blob = new Blob(
+        [response.data],
+        { type: "application/pdf" }
+      );
+
+      const url = window.URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+
+      link.href = url;
+      link.download =
+        `sales-report-${dateFrom || "all"}-to-${dateTo || "all"}.pdf`;
+
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      // Release browser memory after download starts.
+      window.setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+      }, 1000);
+
+    } catch (err) {
+      console.error("Failed to export sales PDF:", err);
+
+      setError(
+        err?.response?.data?.detail ||
+        err?.response?.data?.message ||
+        err?.message ||
+        "Failed to export sales report. Please try again."
+      );
+
+    } finally {
+      setExporting(false);
+    }
+  }, [
+    currentBranchId,
+    search,
+    statusFilter,
+    paymentStatusFilter,
+    dateFrom,
+    dateTo,
+  ]);
+
+  /*
+   * OPEN SALE DETAILS
    */
   const handleView = useCallback(async (sale) => {
     setSelectedSale(sale);
@@ -417,15 +542,16 @@ const Sales = () => {
       const payload = response?.data ?? response;
 
       setSelectedSale(payload);
+
     } catch (err) {
       console.error("Failed to load sale details:", err);
 
-      // Keep the row data available if detail loading fails.
+      // Keep row data available if detail loading fails.
     }
   }, []);
 
   /*
-   * Open the delete confirmation modal.
+   * OPEN DELETE CONFIRMATION MODAL
    */
   const openDeleteModal = useCallback((sale) => {
     setSaleToDelete(sale);
@@ -433,13 +559,15 @@ const Sales = () => {
   }, []);
 
   /*
-   * Delete sale and refresh the current page.
+   * DELETE SALE
    */
   const handleDelete = useCallback(async () => {
     const saleId = getSaleId(saleToDelete);
 
     if (!saleId) {
-      setError("Cannot delete this sale: sale ID is missing.");
+      setError(
+        "Cannot delete this sale: sale ID is missing."
+      );
       return;
     }
 
@@ -453,26 +581,34 @@ const Sales = () => {
       setSaleToDelete(null);
 
       setReloadKey((value) => value + 1);
+
     } catch (err) {
       console.error("Failed to delete sale:", err);
 
       setError(
         err?.response?.data?.detail ||
-          err?.response?.data?.message ||
-          "Failed to delete sale. Please try again."
+        err?.response?.data?.message ||
+        "Failed to delete sale. Please try again."
       );
+
     } finally {
       setDeleting(false);
     }
   }, [saleToDelete]);
 
+  /*
+   * RENDER
+   */
   return (
     <div className="container-fluid py-3">
+
+      {/* Sales Header */}
       <SalesHeader
         loading={loading}
         onRefresh={handleRefresh}
       />
 
+      {/* Error Message */}
       {error && (
         <SalesError
           error={error}
@@ -480,8 +616,10 @@ const Sales = () => {
         />
       )}
 
+      {/* Sales Statistics */}
       <SalesStats statistics={statistics} />
 
+      {/* Sales Filters */}
       <SalesFilters
         search={search}
         setSearch={setSearch}
@@ -496,33 +634,69 @@ const Sales = () => {
         onClear={handleClearFilters}
       />
 
-      {/* Filtered totals */}
+      {/* Filtered Sales Summary */}
       <Card className="shadow-sm mb-3">
         <Card.Body>
+
           <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+
             <div>
-              <h5 className="mb-1">Filtered Sales Summary</h5>
+              <h5 className="mb-1">
+                Filtered Sales Summary
+              </h5>
+
               <small className="text-muted">
                 {pagination.count} matching records reported by the API.
               </small>
             </div>
 
-            {loading && (
-              <Spinner
-                animation="border"
+            <div className="d-flex align-items-center gap-2">
+
+              {loading && (
+                <Spinner
+                  animation="border"
+                  size="sm"
+                  role="status"
+                  aria-label="Loading sales"
+                />
+              )}
+
+              {/* Export PDF */}
+              <Button
+                variant="outline-danger"
                 size="sm"
-                role="status"
-                aria-label="Loading sales"
-              />
-            )}
+                onClick={handleExportPdf}
+                disabled={exporting || loading}
+              >
+                {exporting ? (
+                  <>
+                    <Spinner
+                      animation="border"
+                      size="sm"
+                      className="me-2"
+                    />
+                    Generating PDF...
+                  </>
+                ) : (
+                  <>
+                    <i className="bi bi-file-earmark-pdf me-2"></i>
+                    Export PDF
+                  </>
+                )}
+              </Button>
+
+            </div>
           </div>
 
+          {/* Summary Cards */}
           <Row className="g-3">
+
             <Col xs={6} md={3}>
               <div className="border rounded p-3 h-100">
                 <div className="small text-muted">
                   Loaded Transactions
                 </div>
+
                 <h4 className="mb-0">
                   {filteredSalesSummary.transactionCount}
                 </h4>
@@ -534,8 +708,11 @@ const Sales = () => {
                 <div className="small text-muted">
                   Total Sales
                 </div>
+
                 <h5 className="mb-0 text-success">
-                  {formatCurrency(filteredSalesSummary.totalSales)}
+                  {formatCurrency(
+                    filteredSalesSummary.totalSales
+                  )}
                 </h5>
               </div>
             </Col>
@@ -545,8 +722,11 @@ const Sales = () => {
                 <div className="small text-muted">
                   Total Discount
                 </div>
+
                 <h5 className="mb-0">
-                  {formatCurrency(filteredSalesSummary.totalDiscount)}
+                  {formatCurrency(
+                    filteredSalesSummary.totalDiscount
+                  )}
                 </h5>
               </div>
             </Col>
@@ -556,15 +736,20 @@ const Sales = () => {
                 <div className="small text-muted">
                   Amount Paid
                 </div>
+
                 <h5 className="mb-0 text-primary">
-                  {formatCurrency(filteredSalesSummary.totalPaid)}
+                  {formatCurrency(
+                    filteredSalesSummary.totalPaid
+                  )}
                 </h5>
               </div>
             </Col>
+
           </Row>
         </Card.Body>
       </Card>
 
+      {/* Sales Table */}
       <SalesTable
         loading={loading}
         filteredSales={filteredSales}
@@ -578,12 +763,14 @@ const Sales = () => {
         openDeleteModal={openDeleteModal}
       />
 
+      {/* Sale Details Modal */}
       <SaleViewModal
         showViewModal={showViewModal}
         setShowViewModal={setShowViewModal}
         selectedSale={selectedSale}
       />
 
+      {/* Delete Sale Modal */}
       <SaleDeleteModal
         showDeleteModal={showDeleteModal}
         setShowDeleteModal={setShowDeleteModal}
@@ -592,6 +779,7 @@ const Sales = () => {
         setSaleToDelete={setSaleToDelete}
         handleDelete={handleDelete}
       />
+
     </div>
   );
 };

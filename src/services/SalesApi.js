@@ -398,6 +398,12 @@ const salesApi = {
 
     return response.data;
   },
+
+  exportPdf: (params) =>
+  api.get("/sales/export-pdf/", {
+    params,
+    responseType: "blob",
+  }),
 };
 
 export default salesApi;
