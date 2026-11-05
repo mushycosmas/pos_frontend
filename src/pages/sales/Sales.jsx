@@ -1,4 +1,3 @@
-
 import React, {
   useCallback,
   useEffect,
@@ -46,14 +45,22 @@ const EMPTY_PAGINATION = {
   previous: null,
 };
 
+// Normalize values for comparisons.
 const normalize = (value) =>
   String(value ?? "").trim().toLowerCase();
 
+// Safely convert values to numbers.
 const toNumber = (value) => {
   const number = Number(value ?? 0);
   return Number.isFinite(number) ? number : 0;
 };
 
+/*
+ * Get sale date.
+ *
+ * Keep the original date extraction logic to preserve
+ * the existing date filtering behavior.
+ */
 const getSaleDate = (sale) => {
   const value =
     sale?.created_at ??
@@ -70,7 +77,6 @@ const getSaleDate = (sale) => {
     return String(value).slice(0, 10);
   }
 
-  // Local calendar date avoids timezone shifts.
   return [
     parsed.getFullYear(),
     String(parsed.getMonth() + 1).padStart(2, "0"),
@@ -78,6 +84,9 @@ const getSaleDate = (sale) => {
   ].join("-");
 };
 
+/*
+ * Determine payment status.
+ */
 const getPaymentStatus = (sale) => {
   const explicitStatus =
     sale?.payment_status ??
@@ -94,7 +103,9 @@ const getPaymentStatus = (sale) => {
     }
 
     if (
-      ["partial", "partially_paid", "partially paid"].includes(status)
+      ["partial", "partially_paid", "partially paid"].includes(
+        status
+      )
     ) {
       return "PARTIAL";
     }
@@ -114,6 +125,9 @@ const getPaymentStatus = (sale) => {
   return "UNPAID";
 };
 
+/*
+ * Searchable sale fields.
+ */
 const getSearchableText = (sale) =>
   [
     getInvoiceNumber(sale),
@@ -131,47 +145,72 @@ const getSearchableText = (sale) =>
 const Sales = () => {
   const { currentBranchId } = useBranch();
 
-  // Data and request state.
+  // ==========================================
+  // DATA AND REQUEST STATE
+  // ==========================================
+
   const [sales, setSales] = useState([]);
+
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [exporting, setExporting] = useState(false);
+
   const [error, setError] = useState("");
 
-  // Filters.
+  // ==========================================
+  // FILTER STATE
+  // ==========================================
+
   const [search, setSearch] = useState("");
+
   const [statusFilter, setStatusFilter] = useState("ALL");
+
   const [paymentStatusFilter, setPaymentStatusFilter] =
     useState("ALL");
+
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
-  // Pagination.
-  const [page, setPage] = useState(1);
-  const [pagination, setPagination] = useState(EMPTY_PAGINATION);
+  // ==========================================
+  // PAGINATION
+  // ==========================================
 
-  // Modals.
+  const [page, setPage] = useState(1);
+
+  const [pagination, setPagination] = useState(
+    EMPTY_PAGINATION
+  );
+
+  // ==========================================
+  // MODAL STATE
+  // ==========================================
+
   const [selectedSale, setSelectedSale] = useState(null);
+
   const [saleToDelete, setSaleToDelete] = useState(null);
+
   const [showViewModal, setShowViewModal] = useState(false);
+
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
-  // Increment to reload after refresh or delete.
+  // ==========================================
+  // RELOAD STATE
+  // ==========================================
+
   const [reloadKey, setReloadKey] = useState(0);
 
   /*
-   * FETCH SALES
+   * Build the original sales-list API parameters.
    *
-   * Original implementation preserved.
-   * Filters are sent to Django before pagination.
+   * IMPORTANT:
+   * Do not rename date_from/date_to here.
+   * These are the existing parameters used by the
+   * working sales date filters.
    */
-  const loadSales = useCallback(async () => {
-    setLoading(true);
-    setError("");
-
-    try {
+  const buildSalesParams = useCallback(
+    (requestedPage = page) => {
       const params = {
-        page,
+        page: requestedPage,
         page_size: PAGE_SIZE,
       };
 
@@ -195,6 +234,7 @@ const Sales = () => {
         params.payment_status = paymentStatusFilter;
       }
 
+      // Original date filtering parameters.
       if (dateFrom) {
         params.date_from = dateFrom;
       }
@@ -203,7 +243,36 @@ const Sales = () => {
         params.date_to = dateTo;
       }
 
+      return params;
+    },
+    [
+      page,
+      currentBranchId,
+      search,
+      statusFilter,
+      paymentStatusFilter,
+      dateFrom,
+      dateTo,
+    ]
+  );
+
+  /*
+   * ==========================================
+   * LOAD SALES
+   * ==========================================
+   *
+   * Fetches sales from Django.
+   * Filters are applied by the backend before pagination.
+   */
+  const loadSales = useCallback(async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      const params = buildSalesParams(page);
+
       const response = await salesApi.getAll(params);
+
       const payload = response?.data ?? response;
 
       let results;
@@ -239,7 +308,6 @@ const Sales = () => {
         next,
         previous,
       });
-
     } catch (err) {
       console.error("Failed to load sales:", err);
 
@@ -248,33 +316,24 @@ const Sales = () => {
 
       setError(
         err?.response?.data?.detail ||
-        err?.response?.data?.message ||
-        err?.message ||
-        "Failed to load sales. Please try again."
+          err?.response?.data?.message ||
+          err?.message ||
+          "Failed to load sales. Please try again."
       );
-
     } finally {
       setLoading(false);
     }
-  }, [
-    page,
-    currentBranchId,
-    search,
-    statusFilter,
-    paymentStatusFilter,
-    dateFrom,
-    dateTo,
-    reloadKey,
-  ]);
+  }, [buildSalesParams, page, reloadKey]);
 
+  /*
+   * Load sales whenever API parameters change.
+   */
   useEffect(() => {
     loadSales();
   }, [loadSales]);
 
   /*
-   * RESET PAGINATION WHEN FILTERS CHANGE
-   *
-   * Original implementation preserved.
+   * Reset pagination when filters or branch change.
    */
   useEffect(() => {
     setPage(1);
@@ -288,32 +347,40 @@ const Sales = () => {
   ]);
 
   /*
-   * FILTER SALES
+   * ==========================================
+   * FRONTEND FILTERING
+   * ==========================================
    *
-   * Original implementation preserved.
+   * Preserve the original filtering behavior.
    */
   const filteredSales = useMemo(() => {
     return sales.filter((sale) => {
+      // Search filter.
       const matchesSearch =
         !search.trim() ||
         getSearchableText(sale).includes(normalize(search));
 
+      // Sale status filter.
       const matchesStatus =
         statusFilter === "ALL" ||
         normalize(getStatus(sale)) === normalize(statusFilter);
 
+      // Payment status filter.
       const matchesPaymentStatus =
         paymentStatusFilter === "ALL" ||
         normalize(getPaymentStatus(sale)) ===
           normalize(paymentStatusFilter);
 
+      // Date filter.
       const saleDate = getSaleDate(sale);
 
       const matchesDateFrom =
-        !dateFrom || (saleDate !== "" && saleDate >= dateFrom);
+        !dateFrom ||
+        (saleDate !== "" && saleDate >= dateFrom);
 
       const matchesDateTo =
-        !dateTo || (saleDate !== "" && saleDate <= dateTo);
+        !dateTo ||
+        (saleDate !== "" && saleDate <= dateTo);
 
       return (
         matchesSearch &&
@@ -333,41 +400,49 @@ const Sales = () => {
   ]);
 
   /*
+   * ==========================================
    * FILTERED SALES SUMMARY
+   * ==========================================
    */
-  const filteredSalesSummary = useMemo(
-    () =>
-      filteredSales.reduce(
-        (summary, sale) => {
-          summary.totalSales += toNumber(getTotal(sale));
-          summary.totalSubtotal += toNumber(sale?.subtotal);
-          summary.totalDiscount += toNumber(getDiscount(sale));
-          summary.totalPaid += toNumber(sale?.amount_paid);
-          summary.transactionCount += 1;
+  const filteredSalesSummary = useMemo(() => {
+    return filteredSales.reduce(
+      (summary, sale) => {
+        summary.totalSales += toNumber(getTotal(sale));
 
-          return summary;
-        },
-        {
-          totalSales: 0,
-          totalSubtotal: 0,
-          totalDiscount: 0,
-          totalPaid: 0,
-          transactionCount: 0,
-        }
-      ),
-    [filteredSales]
-  );
+        summary.totalSubtotal += toNumber(sale?.subtotal);
+
+        summary.totalDiscount += toNumber(getDiscount(sale));
+
+        summary.totalPaid += toNumber(sale?.amount_paid);
+
+        summary.transactionCount += 1;
+
+        return summary;
+      },
+      {
+        totalSales: 0,
+        totalSubtotal: 0,
+        totalDiscount: 0,
+        totalPaid: 0,
+        transactionCount: 0,
+      }
+    );
+  }, [filteredSales]);
 
   /*
+   * ==========================================
    * SALES STATISTICS
+   * ==========================================
    */
   const statistics = useMemo(() => {
     const completedSales = filteredSales.filter(
-      (sale) => normalize(getStatus(sale)) === "completed"
+      (sale) =>
+        normalize(getStatus(sale)) === "completed"
     );
 
     const cancelledSales = filteredSales.filter(
-      (sale) => normalize(getStatus(sale)) === "cancelled"
+      (sale) =>
+        normalize(getStatus(sale)) === "cancelled"
     );
 
     return {
@@ -378,7 +453,10 @@ const Sales = () => {
     };
   }, [filteredSales, filteredSalesSummary]);
 
-  // Pagination calculations.
+  // ==========================================
+  // PAGINATION CALCULATIONS
+  // ==========================================
+
   const totalPages = Math.max(
     1,
     Math.ceil(pagination.count / PAGE_SIZE)
@@ -388,14 +466,18 @@ const Sales = () => {
   const canGoNext = page < totalPages;
 
   /*
+   * ==========================================
    * REFRESH SALES
+   * ==========================================
    */
   const handleRefresh = useCallback(() => {
     setReloadKey((value) => value + 1);
   }, []);
 
   /*
-   * CLEAR ALL FILTERS
+   * ==========================================
+   * CLEAR FILTERS
+   * ==========================================
    */
   const handleClearFilters = useCallback(() => {
     setSearch("");
@@ -407,127 +489,149 @@ const Sales = () => {
   }, []);
 
   /*
-   * PAGINATION
+   * ==========================================
+   * PAGINATION HANDLER
+   * ==========================================
    */
   const handlePageChange = useCallback(
     (nextPage) => {
       const requestedPage = Number(nextPage);
 
-      if (!Number.isFinite(requestedPage)) return;
+      if (!Number.isFinite(requestedPage)) {
+        return;
+      }
 
       setPage(
-        Math.min(Math.max(1, requestedPage), totalPages)
+        Math.min(
+          Math.max(1, requestedPage),
+          totalPages
+        )
       );
     },
     [totalPages]
   );
 
   /*
-   * EXPORT PDF
+   * ==========================================
+   * EXPORT SALES PDF
+   * ==========================================
    *
-   * Independent of loadSales().
-   * Does not modify filters, sales state or pagination.
+   * PDF export is independent of loadSales().
+   *
+   * It does not:
+   * - Change the selected dates.
+   * - Change the sales state.
+   * - Reset pagination.
+   * - Modify existing list filters.
    */
-  const handleExportPdf = useCallback(async () => {
-    if (typeof salesApi.exportPdf !== "function") {
-      setError(
-        "PDF export method is missing in SalesApi.js."
-      );
-      return;
+ 
+const handleExportPdf = useCallback(async () => {
+  if (typeof salesApi.exportPdf !== "function") {
+    setError("PDF export method is missing in SalesApi.js.");
+    return;
+  }
+
+  // Open a blank tab immediately to avoid popup blockers.
+  const pdfWindow = window.open("", "_blank");
+
+  if (!pdfWindow) {
+    setError("Please allow pop-ups for this website to view the PDF.");
+    return;
+  }
+
+  setExporting(true);
+  setError("");
+
+  try {
+    const params = {};
+
+    if (
+      currentBranchId !== undefined &&
+      currentBranchId !== null &&
+      currentBranchId !== ""
+    ) {
+      params.branch = currentBranchId;
     }
 
-    setExporting(true);
-    setError("");
+    if (search.trim()) {
+      params.search = search.trim();
+    }
 
-    try {
-      const params = {};
+    if (statusFilter !== "ALL") {
+      params.status = statusFilter;
+    }
 
-      // Branch filter.
-      if (
-        currentBranchId !== undefined &&
-        currentBranchId !== null &&
-        currentBranchId !== ""
-      ) {
-        params.branch = currentBranchId;
-      }
+    if (paymentStatusFilter !== "ALL") {
+      params.payment_status = paymentStatusFilter;
+    }
 
-      // Search filter.
-      if (search.trim()) {
-        params.search = search.trim();
-      }
+    // Preserve the selected date filters.
+    if (dateFrom) {
+      params.from_date = dateFrom;
+    }
 
-      // Sale status filter.
-      if (statusFilter !== "ALL") {
-        params.status = statusFilter;
-      }
+    if (dateTo) {
+      params.to_date = dateTo;
+    }
 
-      // Payment status filter.
-      if (paymentStatusFilter !== "ALL") {
-        params.payment_status = paymentStatusFilter;
-      }
+    // Fetch the PDF from Django.
+    const response = await salesApi.exportPdf(params);
 
-      // Date filters.
-      if (dateFrom) {
-        params.date_from = dateFrom;
-      }
+    const pdfData = response?.data ?? response;
 
-      if (dateTo) {
-        params.date_to = dateTo;
-      }
+    if (!pdfData || pdfData.size === 0) {
+      throw new Error("The PDF response is empty.");
+    }
 
-      // Request PDF from Django.
-      const response = await salesApi.exportPdf(params);
+    const blob =
+      pdfData instanceof Blob
+        ? pdfData
+        : new Blob([pdfData], {
+            type: "application/pdf",
+          });
 
-      if (!response?.data) {
-        throw new Error("The PDF response is empty.");
-      }
+    if (blob.type !== "application/pdf") {
+      throw new Error("The server did not return a valid PDF.");
+    }
 
-      const blob = new Blob(
-        [response.data],
-        { type: "application/pdf" }
-      );
+    const pdfUrl = window.URL.createObjectURL(blob);
 
-      const url = window.URL.createObjectURL(blob);
+    // Display PDF in the newly opened browser tab.
+    pdfWindow.location.href = pdfUrl;
 
-      const link = document.createElement("a");
+    // Release the object URL after the PDF has had time to load.
+    window.setTimeout(() => {
+      window.URL.revokeObjectURL(pdfUrl);
+    }, 60000);
 
-      link.href = url;
-      link.download =
-        `sales-report-${dateFrom || "all"}-to-${dateTo || "all"}.pdf`;
+  } catch (err) {
+    console.error("Failed to export sales PDF:", err);
 
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+    pdfWindow.close();
 
-      // Release browser memory after download starts.
-      window.setTimeout(() => {
-        window.URL.revokeObjectURL(url);
-      }, 1000);
-
-    } catch (err) {
-      console.error("Failed to export sales PDF:", err);
-
-      setError(
-        err?.response?.data?.detail ||
+    setError(
+      err?.response?.data?.detail ||
         err?.response?.data?.message ||
         err?.message ||
-        "Failed to export sales report. Please try again."
-      );
+        "Failed to open sales report. Please try again."
+    );
+  } finally {
+    setExporting(false);
+  }
+}, [
+  currentBranchId,
+  search,
+  statusFilter,
+  paymentStatusFilter,
+  dateFrom,
+  dateTo,
+]);
 
-    } finally {
-      setExporting(false);
-    }
-  }, [
-    currentBranchId,
-    search,
-    statusFilter,
-    paymentStatusFilter,
-    dateFrom,
-    dateTo,
-  ]);
 
   /*
-   * OPEN SALE DETAILS
+   * ==========================================
+   * VIEW SALE DETAILS
+   * ==========================================
    */
   const handleView = useCallback(async (sale) => {
     setSelectedSale(sale);
@@ -535,23 +639,27 @@ const Sales = () => {
 
     const saleId = getSaleId(sale);
 
-    if (!saleId || !salesApi.getById) return;
+    if (!saleId || !salesApi.getById) {
+      return;
+    }
 
     try {
       const response = await salesApi.getById(saleId);
+
       const payload = response?.data ?? response;
 
       setSelectedSale(payload);
-
     } catch (err) {
       console.error("Failed to load sale details:", err);
 
-      // Keep row data available if detail loading fails.
+      // Keep existing row data if detail loading fails.
     }
   }, []);
 
   /*
-   * OPEN DELETE CONFIRMATION MODAL
+   * ==========================================
+   * OPEN DELETE MODAL
+   * ==========================================
    */
   const openDeleteModal = useCallback((sale) => {
     setSaleToDelete(sale);
@@ -559,7 +667,9 @@ const Sales = () => {
   }, []);
 
   /*
+   * ==========================================
    * DELETE SALE
+   * ==========================================
    */
   const handleDelete = useCallback(async () => {
     const saleId = getSaleId(saleToDelete);
@@ -581,23 +691,23 @@ const Sales = () => {
       setSaleToDelete(null);
 
       setReloadKey((value) => value + 1);
-
     } catch (err) {
       console.error("Failed to delete sale:", err);
 
       setError(
         err?.response?.data?.detail ||
-        err?.response?.data?.message ||
-        "Failed to delete sale. Please try again."
+          err?.response?.data?.message ||
+          "Failed to delete sale. Please try again."
       );
-
     } finally {
       setDeleting(false);
     }
   }, [saleToDelete]);
 
   /*
+   * ==========================================
    * RENDER
+   * ==========================================
    */
   return (
     <div className="container-fluid py-3">
